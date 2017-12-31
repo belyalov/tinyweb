@@ -61,17 +61,20 @@ class request:
         self.query_string = b''
 
     def __repr__(self):
-        return '{} {:s} {:s}?{:s}\n{}'.format(self.__class__, self.method, self.path,
+        return '{} {:s} {:s} {:s}\n{}'.format(self.__class__, self.method, self.path,
                                               self.query_string, str(self.headers))
 
     def read_request_line(self):
         """Read and parser HTTP RequestLine, e.g.:
             GET /something/script?param1=val1 HTTP/1.1
         """
-        request_line = yield from self.reader.readline()
-        if len(request_line.rstrip()) == 0:
-            raise MalformedHTTP('EOF on request start')
-        rl_frags = request_line.split()
+        while True:
+            rl = yield from self.reader.readline()
+            # skip empty lines
+            if rl == b'\r\n' or rl == b'\n':
+                continue
+            break
+        rl_frags = rl.split()
         if len(rl_frags) != 3:
             raise MalformedHTTP('Malformed Request Line')
         self.method = rl_frags[0]
@@ -81,7 +84,9 @@ class request:
             self.query_string = url_frags[1]
 
     def read_headers(self):
-        """Reads and parses HTTP headers"""
+        """Reads and parses HTTP headers, e.g.:
+            Host: google.com
+        """
         while True:
             line = yield from self.reader.readline()
             if line == b'\r\n':
@@ -120,9 +125,7 @@ class webserver:
             resp = response(writer)
             yield from req.read_request_line()
             yield from req.read_headers()
-            print(req)
         except MalformedHTTP as e:
-            sys.print_exception(e)
             yield from resp.error(400)
         except Exception as e:
             yield from resp.error(500)
@@ -130,10 +133,10 @@ class webserver:
         finally:
             yield from writer.aclose()
 
-    def run(self, host="127.0.0.1", port=8081, run_forever=True):
+    def run(self, host="127.0.0.1", port=8081, run_forever=True, backlog=16):
         loop = asyncio.get_event_loop()
-        print("* Starting Web Server {}:{}".format(host, port))
-        loop.create_task(asyncio.start_server(self._handler, host, port))
+        print("* Starting Web Server at {}:{}".format(host, port))
+        loop.create_task(asyncio.start_server(self._handler, host, port, backlog=backlog))
         if run_forever:
             loop.run_forever()
             loop.close()
