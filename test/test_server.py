@@ -9,11 +9,13 @@ import tinyweb.server as server
 # Helpers
 
 # HTTP headers helpers
-HDRE = '\r\n'
 
 
 def HDR(str):
     return '{}\r\n'.format(str)
+
+
+HDRE = '\r\n'
 
 
 class mockReader():
@@ -143,6 +145,76 @@ class ServerParts(unittest.TestCase):
         run_generator(req.read_headers())
         self.assertEqual(req.headers, hdrs)
 
+    def testUrlFinderExplicit(self):
+        urls = [('/', 1),
+                ('/%20', 2),
+                ('/a/b', 3),
+                ('/aac', 5)]
+        junk = ['//', '', '/a', '/aa', '/a/fhhfhfhfhfhf']
+        # Create server, add routes
+        srv = server.webserver()
+        for u in urls:
+            srv.add_route(u[0], u[1])
+        # Search them all
+        for u in urls:
+            # Create mock request object with "pre-parsed" url path
+            rq = server.request(mockReader([]))
+            rq.path = u[0].encode()
+            f, args = srv._find_url_handler(rq)
+            self.assertEqual(u[1], f)
+        # Some simple negative cases
+        for j in junk:
+            rq = server.request(mockReader([]))
+            rq.path = j.encode()
+            f, args = srv._find_url_handler(rq)
+            self.assertIsNone(f)
+            self.assertIsNone(args)
+
+    def testUrlFinderParameterized(self):
+        srv = server.webserver()
+        # Add few routes
+        srv.add_route('/', 0)
+        srv.add_route('/<user_name>', 1)
+        srv.add_route('/a/<id>', 2)
+        # Check first url (non param)
+        rq = server.request(mockReader([]))
+        rq.path = b'/'
+        f, args = srv._find_url_handler(rq)
+        self.assertEqual(f, 0)
+        # Check second url
+        rq.path = b'/user1'
+        f, args = srv._find_url_handler(rq)
+        self.assertEqual(f, 1)
+        self.assertEqual(args, {'param_name': 'user_name'})
+        self.assertEqual(rq._param, 'user1')
+        # Check third url
+        rq.path = b'/a/123456'
+        f, args = srv._find_url_handler(rq)
+        self.assertEqual(f, 2)
+        self.assertEqual(args, {'param_name': 'id'})
+        self.assertEqual(rq._param, '123456')
+        # When param is empty and there is no non param endpoint
+        rq.path = b'/a/'
+        f, args = srv._find_url_handler(rq)
+        self.assertEqual(f, 2)
+        self.assertEqual(rq._param, '')
+
+    def testUrlFinderNegative(self):
+        srv = server.webserver()
+        # empty URL is not allowed
+        with self.assertRaises(ValueError):
+            srv.add_route('', 1)
+        # Query string is not allowed
+        with self.assertRaises(ValueError):
+            srv.add_route('/?a=a', 1)
+        # Duplicate urls
+        srv.add_route('/duppp', 1)
+        with self.assertRaises(ValueError):
+            srv.add_route('/duppp', 1)
+        # Wrong parameterized URL (missed '<')
+        with self.assertRaises(ValueError):
+            srv.add_route('/id>', 1)
+
 
 class ServerFull(unittest.TestCase):
 
@@ -158,15 +230,29 @@ class ServerFull(unittest.TestCase):
         # Connection must be closed
         self.assertTrue(wrt.closed)
 
+    # def testStartHTML(self):
+    #     rdr = mockReader(['GET / HTTP/1.1\r\n',
+    #                       HDR('Host: blah.com'),
+    #                       HDRE])
+    #     wrt = mockWriter()
+    #     srv = server.webserver()
+    #     run_generator(srv._handler(rdr, wrt))
+    #     # TODO: test incomplete. Mapping / Assertion must be added
+    #     # Connection must be closed
+    #     self.assertTrue(wrt.closed)
+
     def testMalformedRequest(self):
+        """Verify that malformed request generates proper response (http err)"""
         rdr = mockReader(['GET /\r\n',
                           HDR('Host: blah.com'),
                           HDRE])
         wrt = mockWriter()
         srv = server.webserver()
         run_generator(srv._handler(rdr, wrt))
-        # Request should generate HTTP 400 response
-        self.assertEqual(wrt.history, ['HTTP/1.0 400 Bad Request\r\n\r\n'])
+        exp = ['HTTP/1.0 400 Bad Request\r\n',
+               'Content-Type: text/plain\r\n\r\n',
+               'HTTP 400 Bad Request\r\n']
+        self.assertEqual(wrt.history, exp)
         # Connection must be closed
         self.assertTrue(wrt.closed)
 

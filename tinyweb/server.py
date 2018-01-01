@@ -27,7 +27,7 @@ http_status_codes = {200: 'OK',
                      401: 'Unauthorized',
                      403: 'Forbidden',
                      404: 'Not Found',
-                     405: 'Not Allowed',
+                     405: 'Method Not Allowed',
                      406: 'Not Acceptable',
                      409: 'Conflict',
                      413: 'Payload Too Large',
@@ -102,21 +102,70 @@ class response:
 
     def __init__(self, _writer):
         self.writer = _writer
+        self.send = _writer.awrite
         self.code = 200
         self.headers = {}
 
+    def _send_response_line(self):
+        yield from self.send('HTTP/1.0 {} {}\r\n'.
+                             format(self.code, http_status_codes[self.code]))
+
+    def _send_headers(self):
+        # Because of usually we have only a few HTTP headers (2-5) it doesn't make sense
+        # to send them separately - sometimes it could increase latency.
+        # So combining headers together and send them as single "packet".
+        hdrs = []
+        for k, v in self.headers.items():
+            hdrs.append('{}: {}'.format(k, v))
+        # Empty line after headers
+        hdrs.append('\r\n')
+        yield from self.send('\r\n'.join(hdrs))
+
     def error(self, code, message=None):
-        yield from self.writer.awrite('HTTP/1.0 {} {}\r\n\r\n'.
-                                      format(code, http_status_codes[code]))
-        if message:
-            yield from self.writer.awrite(message)
+        self.code = code
+        if not message:
+            message = 'HTTP {} {}\r\n'.format(self.code, http_status_codes[self.code])
+        self.add_header('Content-Type', 'text/plain')
+        yield from self._send_response_line()
+        yield from self._send_headers()
+        yield from self.send(message)
+
+    def add_header(self, key, value):
+        self.headers[key] = value
+
+    def add_access_control_headers(self, origins='*', methods='*', headers='*'):
+        self.add_header('Access-Control-Allow-Origin', origins)
+        self.add_header('Access-Control-Allow-Methods', methods)
+        self.add_header('Access-Control-Allow-Headers', headers)
+
+    def start_html(self):
+        self.add_header('Content-Type', 'text/html')
+        yield from self._send_response_line()
+        yield from self._send_headers()
 
 
 class webserver:
     """Simple web server class"""
 
     def __init__(self):
-        pass
+        self.explicit_url_map = {}
+        self.parameterized_url_map = {}
+
+    def _find_url_handler(self, req):
+        """Helper to find URL handler.
+           Returns tuple of (function, opts, param) or (None, None) if not found."""
+        # First try - lookup in explicit (non parameterized URLs)
+        if req.path in self.explicit_url_map:
+            return self.explicit_url_map[req.path]
+        # Second try - strip last path segment and lookup in another map
+        idx = req.path.rfind(b'/') + 1
+        path2 = req.path[:idx]
+        if len(path2) > 0 and path2 in self.parameterized_url_map:
+            # Save parameter into request
+            req._param = req.path[idx:].decode()
+            return self.parameterized_url_map[path2]
+        # No handler found
+        return (None, None)
 
     def _handler(self, reader, writer):
         """Handler for HTTP connection"""
@@ -124,6 +173,12 @@ class webserver:
             req = request(reader)
             resp = response(writer)
             yield from req.read_request_line()
+            handler, extra = self._find_url_handler(req)
+            if not handler:
+                # No URL handler found - HTTP 404
+                yield from resp.error(404)
+                return
+            # Handler found, read / parser HTTP headers
             yield from req.read_headers()
         except MalformedHTTP as e:
             yield from resp.error(400)
@@ -133,10 +188,38 @@ class webserver:
         finally:
             yield from writer.aclose()
 
-    def run(self, host="127.0.0.1", port=8081, run_forever=True, backlog=16):
+    def add_route(self, url, f, **kwargs):
+        if url == '':
+            raise ValueError('Empty URL is not allowed')
+        if '?' in url:
+            raise ValueError('URL must be simple, without query string')
+        # If URL has a parameter
+        if url.endswith('>'):
+            idx = url.rfind('<')
+            if idx == -1:
+                raise ValueError('"<" not found in URL')
+            path = url[:idx]
+            idx += 1
+            param = url[idx:-1]
+            if path.encode() in self.parameterized_url_map:
+                raise ValueError('URL already exists')
+            kwargs['param_name'] = param
+            self.parameterized_url_map[path.encode()] = (f, kwargs)
+
+        if url.encode() in self.explicit_url_map:
+            raise ValueError('URL already exists')
+        self.explicit_url_map[url.encode()] = (f, kwargs)
+
+    def route(self, url, **kwargs):
+        def _route(f):
+            self.add_route(url, f, kwargs)
+            return f
+        return _route
+
+    def run(self, host="127.0.0.1", port=8081, loop_forever=True, backlog=16):
         loop = asyncio.get_event_loop()
         print("* Starting Web Server at {}:{}".format(host, port))
         loop.create_task(asyncio.start_server(self._handler, host, port, backlog=backlog))
-        if run_forever:
+        if loop_forever:
             loop.run_forever()
             loop.close()
