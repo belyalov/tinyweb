@@ -194,7 +194,10 @@ class webserver:
             if params['parse_headers']:
                 yield from req.read_headers()
             # Handle URL
-            yield from handler(req, resp)
+            if hasattr(req, '_param'):
+                yield from handler(req, resp, req._param)
+            else:
+                yield from handler(req, resp)
             # Done
         except MalformedHTTP as e:
             yield from resp.error(400)
@@ -234,7 +237,7 @@ class webserver:
 
     def route(self, url, **kwargs):
         def _route(f):
-            self.add_route(url, f, kwargs)
+            self.add_route(url, f, **kwargs)
             return f
         return _route
 

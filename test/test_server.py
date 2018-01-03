@@ -216,6 +216,16 @@ class ServerParts(unittest.TestCase):
             srv.add_route('/id>', 1)
 
 
+# We want to test decorator @server.route as well
+server_for_decorator = server.webserver()
+
+
+@server_for_decorator.route('/uid/<user_id>')
+def route_for_decorator(req, resp, user_id):
+    yield from resp.start_html()
+    yield from resp.send('YO, {}'.format(user_id))
+
+
 class ServerFull(unittest.TestCase):
 
     def setUp(self):
@@ -223,6 +233,20 @@ class ServerFull(unittest.TestCase):
         self.hello_world_history = ['HTTP/1.0 200 OK\r\n',
                                     'Content-Type: text/html\r\n\r\n',
                                     '<html><h1>Hello world</h1></html>']
+
+    def testDecorator(self):
+        """Test @.route() decorator"""
+        rdr = mockReader(['GET /uid/man1 HTTP/1.1\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        # "Send" request
+        run_generator(server_for_decorator._handler(rdr, wrt))
+        # Ensure that proper response "sent"
+        expected = ['HTTP/1.0 200 OK\r\n',
+                    'Content-Type: text/html\r\n\r\n',
+                    'YO, man1']
+        self.assertEqual(wrt.history, expected)
+        self.assertTrue(wrt.closed)
 
     def dummy_handler(self, req, resp):
         """Dummy URL handler. It just records the fact - it has been called"""
@@ -248,6 +272,27 @@ class ServerFull(unittest.TestCase):
         run_generator(srv._handler(rdr, wrt))
         # Ensure that proper response "sent"
         self.assertEqual(wrt.history, self.hello_world_history)
+        self.assertTrue(wrt.closed)
+
+    def route_parameterized_handler(self, req, resp, user_name):
+        yield from resp.start_html()
+        yield from resp.send('<html>Hello, {}</html>'.format(user_name))
+
+    def testRouteParameterized(self):
+        """Verify that route with params works fine"""
+        srv = server.webserver()
+        srv.add_route('/db/<user_name>', self.route_parameterized_handler)
+        rdr = mockReader(['GET /db/user1 HTTP/1.1\r\n',
+                          HDR('Host: junk.com'),
+                          HDRE])
+        wrt = mockWriter()
+        # "Send" request
+        run_generator(srv._handler(rdr, wrt))
+        # Ensure that proper response "sent"
+        expected = ['HTTP/1.0 200 OK\r\n',
+                    'Content-Type: text/html\r\n\r\n',
+                    '<html>Hello, user1</html>']
+        self.assertEqual(wrt.history, expected)
         self.assertTrue(wrt.closed)
 
     def testParseHeadersOnOff(self):
