@@ -5,6 +5,7 @@ MIT license
 """
 import sys
 import uasyncio as asyncio
+import ujson as json
 
 
 mime_types = {'.html': 'text/html',
@@ -40,6 +41,13 @@ PUT = b'PUT'
 HEAD = b'HEAD'
 DELETE = b'DELETE'
 OPTIONS = b'OPTIONS'
+
+
+# Supported methods for RESTful API class
+restful_methods = {GET: 'get',
+                   POST: 'post',
+                   PUT: 'put',
+                   DELETE: 'delete'}
 
 
 def get_file_mime_type(fname):
@@ -141,15 +149,32 @@ class response:
     def add_header(self, key, value):
         self.headers[key] = value
 
-    def add_access_control_headers(self, params):
-        self.add_header('Access-Control-Allow-Origin', params['allowed_access_control_origins'])
-        self.add_header('Access-Control-Allow-Methods', params['allowed_access_control_methods'])
-        self.add_header('Access-Control-Allow-Headers', params['allowed_access_control_headers'])
+    def add_access_control_headers(self):
+        self.add_header('Access-Control-Allow-Origin', self.params['allowed_access_control_origins'])
+        self.add_header('Access-Control-Allow-Methods', self.params['allowed_access_control_methods'])
+        self.add_header('Access-Control-Allow-Headers', self.params['allowed_access_control_headers'])
 
     def start_html(self):
         self.add_header('Content-Type', 'text/html')
         yield from self._send_response_line()
         yield from self._send_headers()
+
+
+def restful_resource_handler(req, resp):
+    """Handler for RESTful API endpoins"""
+    # Gather data - query string, JSON in request body...
+    data = {'a': 1}
+    # Call actual handler
+    res = req.params['_callmap'][req.method](req.params['_class'], data)
+
+    # Send response
+    res_str = json.dumps(res)
+    resp.add_header('Content-Type', 'application/json')
+    resp.add_header('Content-Length', str(len(res_str)))
+    resp.add_access_control_headers()
+    yield from resp._send_response_line()
+    yield from resp._send_headers()
+    yield from resp.send(res_str)
 
 
 class webserver:
@@ -189,10 +214,12 @@ class webserver:
                 # No URL handler found - HTTP 404
                 yield from resp.error(404)
                 return
+            req.params = params
+            resp.params = params
 
             # OPTIONS method is handled automatically (if not disabled)
             if params['auto_method_options'] and req.method == OPTIONS:
-                resp.add_access_control_headers(params)
+                resp.add_access_control_headers()
                 yield from resp._send_response_line()
                 yield from resp._send_headers()
                 return
@@ -246,12 +273,22 @@ class webserver:
             param = url[idx:-1]
             if path.encode() in self.parameterized_url_map:
                 raise ValueError('URL already exists')
-            params['param_name'] = param
+            params['_param_name'] = param
             self.parameterized_url_map[path.encode()] = (f, params)
 
         if url.encode() in self.explicit_url_map:
             raise ValueError('URL already exists')
         self.explicit_url_map[url.encode()] = (f, params)
+
+    def add_resource(self, cls, url):
+        methods = []
+        callmap = {}
+        # Get all implemented HTTP methods in resource class
+        for m, a in restful_methods.items():
+            if hasattr(cls, a):
+                methods.append(m)
+                callmap[m] = getattr(cls, a)
+        self.add_route(url, restful_resource_handler, methods=methods, _callmap=callmap, _class=cls)
 
     def route(self, url, **kwargs):
         def _route(f):

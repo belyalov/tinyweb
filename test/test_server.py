@@ -1,3 +1,4 @@
+#!/usr/bin/env micropython
 """
 Unittests for Tiny Web
 MIT license
@@ -186,13 +187,13 @@ class ServerParts(unittest.TestCase):
         rq.path = b'/user1'
         f, args = srv._find_url_handler(rq)
         self.assertEqual(f, 1)
-        self.assertEqual(args['param_name'], 'user_name')
+        self.assertEqual(args['_param_name'], 'user_name')
         self.assertEqual(rq._param, 'user1')
         # Check third url
         rq.path = b'/a/123456'
         f, args = srv._find_url_handler(rq)
         self.assertEqual(f, 2)
-        self.assertEqual(args['param_name'], 'id')
+        self.assertEqual(args['_param_name'], 'id')
         self.assertEqual(rq._param, '123456')
         # When param is empty and there is no non param endpoint
         rq.path = b'/a/'
@@ -218,10 +219,10 @@ class ServerParts(unittest.TestCase):
 
 
 # We want to test decorator @server.route as well
-server_for_decorator = server.webserver()
+server_for_decorators = server.webserver()
 
 
-@server_for_decorator.route('/uid/<user_id>')
+@server_for_decorators.route('/uid/<user_id>')
 def route_for_decorator(req, resp, user_id):
     yield from resp.start_html()
     yield from resp.send('YO, {}'.format(user_id))
@@ -241,7 +242,7 @@ class ServerFull(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         # "Send" request
-        run_generator(server_for_decorator._handler(rdr, wrt))
+        run_generator(server_for_decorators._handler(rdr, wrt))
         # Ensure that proper response "sent"
         expected = ['HTTP/1.0 200 OK\r\n',
                     'Content-Type: text/html\r\n\r\n',
@@ -398,6 +399,65 @@ class ServerFull(unittest.TestCase):
         self.assertEqual(wrt.history, exp)
         # Connection must be closed
         self.assertTrue(wrt.closed)
+
+
+class ResourceGetPost():
+    """Simple REST API resource class with just two methods"""
+
+    def get(self, data):
+        return {"data1": "junk"}
+
+    def post(self, data):
+        return {"data2": "junk"}
+
+
+class ServerResource(unittest.TestCase):
+
+    def setUp(self):
+        pass
+
+    def testGetPost(self):
+        srv = server.webserver()
+        srv.add_resource(ResourceGetPost, '/')
+        # Ensure that only GET method is allowed:
+        # 1. Query OPTIONS for URL
+        rdr = mockReader(['OPTIONS / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        exp = ['HTTP/1.0 200 OK\r\n',
+               'Access-Control-Allow-Headers: *\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST GET\r\n\r\n']
+        self.assertEqual(wrt.history, exp)
+
+        # 2. Positive case - GET
+        rdr = mockReader(['GET / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        exp = ['HTTP/1.0 200 OK\r\n',
+               'Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nContent-Length: 17\r\nAccess-Control-Allow-Methods: POST GET\r\nContent-Type: application/json\r\n\r\n',
+               '{"data1": "junk"}']
+        self.assertEqual(wrt.history, exp)
+
+        # 3. Positive case - POST
+        rdr = mockReader(['POST / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        exp = ['HTTP/1.0 200 OK\r\n',
+               'Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nContent-Length: 17\r\nAccess-Control-Allow-Methods: POST GET\r\nContent-Type: application/json\r\n\r\n',
+               '{"data2": "junk"}']
+        self.assertEqual(wrt.history, exp)
+
+        # 4. Negative case - no such method implemented
+        rdr = mockReader(['PUT / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
+               'Content-Type: text/plain\r\n\r\n',
+               'HTTP 405 Method Not Allowed\r\n']
+        self.assertEqual(wrt.history, exp)
 
 
 if __name__ == '__main__':
