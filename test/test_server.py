@@ -66,9 +66,8 @@ def run_generator(gen):
 class Utils(unittest.TestCase):
 
     def testMimeTypes(self):
-        for ext, mime in server.mime_types.items():
-            res = server.get_file_mime_type('aaa' + ext)
-            self.assertEqual(res, mime)
+        self.assertEqual(server.get_file_mime_type('a.html'), 'text/html')
+        self.assertEqual(server.get_file_mime_type('a.gif'), 'image/gif')
 
     def testMimeTypesUnknown(self):
         runs = ['', '.', 'bbb', 'bbb.bbbb', '/', ' ']
@@ -213,9 +212,6 @@ class ServerParts(unittest.TestCase):
         srv.add_route('/duppp', 1)
         with self.assertRaises(ValueError):
             srv.add_route('/duppp', 1)
-        # Wrong parameterized URL (missed '<')
-        with self.assertRaises(ValueError):
-            srv.add_route('/id>', 1)
 
 
 # We want to test decorator @server.route as well
@@ -353,8 +349,7 @@ class ServerFull(unittest.TestCase):
         # Hanlder should not be called - method not allowed
         self.assertFalse(self.dummy_called)
         exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
-               'Content-Type: text/plain\r\n\r\n',
-               'HTTP 405 Method Not Allowed\r\n']
+               '\r\n']
         self.assertEqual(wrt.history, exp)
         # Connection must be closed
         self.assertTrue(wrt.closed)
@@ -380,8 +375,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
-               'Content-Type: text/plain\r\n\r\n',
-               'HTTP 405 Method Not Allowed\r\n']
+               '\r\n']
         self.assertEqual(wrt.history, exp)
         self.assertTrue(wrt.closed)
 
@@ -394,8 +388,7 @@ class ServerFull(unittest.TestCase):
         srv = server.webserver()
         run_generator(srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 400 Bad Request\r\n',
-               'Content-Type: text/plain\r\n\r\n',
-               'HTTP 400 Bad Request\r\n']
+               '\r\n']
         self.assertEqual(wrt.history, exp)
         # Connection must be closed
         self.assertTrue(wrt.closed)
@@ -455,8 +448,7 @@ class ServerResource(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
-               'Content-Type: text/plain\r\n\r\n',
-               'HTTP 405 Method Not Allowed\r\n']
+               '\r\n']
         self.assertEqual(wrt.history, exp)
 
 

@@ -3,37 +3,9 @@ Tiny Web - pretty simple and powerful web server for tiny platforms like ESP8266
 MIT license
 (C) Konstantin Belyalov 2017-2018
 """
-import sys
 import uasyncio as asyncio
 import ujson as json
 
-
-mime_types = {'.html': 'text/html',
-              '.css': 'text/css',
-              '.js': 'application/javascript',
-              '.png': 'image/png',
-              '.jpg': 'image/jpeg',
-              '.jpeg': 'image/jpeg',
-              '.gif': 'image/gif'}
-
-http_status_codes = {200: 'OK',
-                     201: 'Created',
-                     202: 'Accepted',
-                     204: 'No Content',
-                     206: 'Partial Content',
-                     301: 'Moved Permanently',
-                     302: 'Found',
-                     303: 'See Other',
-                     304: 'Not Modified',
-                     400: 'Bad Request',
-                     401: 'Unauthorized',
-                     403: 'Forbidden',
-                     404: 'Not Found',
-                     405: 'Method Not Allowed',
-                     406: 'Not Acceptable',
-                     409: 'Conflict',
-                     413: 'Payload Too Large',
-                     500: 'Internal Server Error'}
 
 GET = b'GET'
 POST = b'POST'
@@ -51,6 +23,13 @@ restful_methods = {GET: 'get',
 
 
 def get_file_mime_type(fname):
+    mime_types = {'.html': 'text/html',
+                  '.css': 'text/css',
+                  '.js': 'application/javascript',
+                  '.png': 'image/png',
+                  '.jpg': 'image/jpeg',
+                  '.jpeg': 'image/jpeg',
+                  '.gif': 'image/gif'}
     idx = fname.rfind('.')
     if idx == -1:
         return 'text/plain'
@@ -92,7 +71,7 @@ class request:
             break
         rl_frags = rl.split()
         if len(rl_frags) != 3:
-            raise MalformedHTTP('Malformed Request Line')
+            raise MalformedHTTP()
         self.method = rl_frags[0]
         url_frags = rl_frags[1].split(b'?', 1)
         self.path = url_frags[0]
@@ -109,7 +88,7 @@ class request:
                 break
             frags = line.split(b':', 1)
             if len(frags) != 2:
-                raise MalformedHTTP('Malformed HTTP header')
+                raise MalformedHTTP()
             self.headers[frags[0]] = frags[1].strip()
 
 
@@ -121,10 +100,20 @@ class response:
         self.send = _writer.awrite
         self.code = 200
         self.headers = {}
+        self.http_status_codes = {200: 'OK',
+                                  201: 'Created',
+                                  302: 'Found',
+                                  304: 'Not Modified',
+                                  400: 'Bad Request',
+                                  403: 'Forbidden',
+                                  404: 'Not Found',
+                                  405: 'Method Not Allowed',
+                                  413: 'Payload Too Large',
+                                  500: 'Internal Server Error'}
 
     def _send_response_line(self):
         yield from self.send('HTTP/1.0 {} {}\r\n'.
-                             format(self.code, http_status_codes[self.code]))
+                             format(self.code, self.http_status_codes[self.code]))
 
     def _send_headers(self):
         # Because of usually we have only a few HTTP headers (2-5) it doesn't make sense
@@ -137,14 +126,10 @@ class response:
         hdrs.append('\r\n')
         yield from self.send('\r\n'.join(hdrs))
 
-    def error(self, code, message=None):
+    def error(self, code):
         self.code = code
-        if not message:
-            message = 'HTTP {} {}\r\n'.format(self.code, http_status_codes[self.code])
-        self.add_header('Content-Type', 'text/plain')
         yield from self._send_response_line()
-        yield from self._send_headers()
-        yield from self.send(message)
+        yield from self.send('\r\n')
 
     def add_header(self, key, value):
         self.headers[key] = value
@@ -243,15 +228,12 @@ class webserver:
             yield from resp.error(400)
         except Exception as e:
             yield from resp.error(500)
-            sys.print_exception(e)
         finally:
             yield from writer.aclose()
 
     def add_route(self, url, f, **kwargs):
-        if url == '':
-            raise ValueError('Empty URL is not allowed')
-        if '?' in url:
-            raise ValueError('URL must be simple, without query string')
+        if url == '' or '?' in url:
+            raise ValueError('Invalid URL')
         # Inital params for route
         params = {'methods': [GET],
                   'parse_headers': True,
@@ -266,8 +248,6 @@ class webserver:
         # If URL has a parameter
         if url.endswith('>'):
             idx = url.rfind('<')
-            if idx == -1:
-                raise ValueError('"<" not found in URL')
             path = url[:idx]
             idx += 1
             param = url[idx:-1]
