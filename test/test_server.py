@@ -185,13 +185,13 @@ class ServerParts(unittest.TestCase):
         rq.path = b'/user1'
         f, args = srv._find_url_handler(rq)
         self.assertEqual(f, 1)
-        self.assertEqual(args, {'param_name': 'user_name'})
+        self.assertEqual(args['param_name'], 'user_name')
         self.assertEqual(rq._param, 'user1')
         # Check third url
         rq.path = b'/a/123456'
         f, args = srv._find_url_handler(rq)
         self.assertEqual(f, 2)
-        self.assertEqual(args, {'param_name': 'id'})
+        self.assertEqual(args['param_name'], 'id')
         self.assertEqual(rq._param, '123456')
         # When param is empty and there is no non param endpoint
         rq.path = b'/a/'
@@ -218,28 +218,99 @@ class ServerParts(unittest.TestCase):
 
 class ServerFull(unittest.TestCase):
 
-    def testSimpleGETRequest(self):
-        rdr = mockReader(['GET /junk/?abc=abc&cde=cde HTTP/1.1\r\n',
+    def setUp(self):
+        self.dummy_called = False
+        self.hello_world_history = ['HTTP/1.0 200 OK\r\n',
+                                    'Content-Type: text/html\r\n\r\n',
+                                    '<html><h1>Hello world</h1></html>']
+
+    def dummy_handler(self, req, resp):
+        """Dummy URL handler. It just records the fact - it has been called"""
+        self.dummy_req = req
+        self.dummy_resp = resp
+        self.dummy_called = True
+        yield
+
+    def hello_world_handler(self, req, resp):
+        # handler for '/'
+        yield from resp.start_html()
+        yield from resp.send('<html><h1>Hello world</h1></html>')
+
+    def testStartHTML(self):
+        """Verify that request.start_html() works well"""
+        srv = server.webserver()
+        srv.add_route('/', self.hello_world_handler)
+        rdr = mockReader(['GET / HTTP/1.1\r\n',
                           HDR('Host: blah.com'),
-                          HDR('Content-Type: junk-junk'),
                           HDRE])
         wrt = mockWriter()
-        srv = server.webserver()
+        # "Send" request
         run_generator(srv._handler(rdr, wrt))
-        # TODO: test incomplete. Mapping / Assertion must be added
-        # Connection must be closed
+        # Ensure that proper response "sent"
+        self.assertEqual(wrt.history, self.hello_world_history)
         self.assertTrue(wrt.closed)
 
-    # def testStartHTML(self):
-    #     rdr = mockReader(['GET / HTTP/1.1\r\n',
-    #                       HDR('Host: blah.com'),
-    #                       HDRE])
-    #     wrt = mockWriter()
-    #     srv = server.webserver()
-    #     run_generator(srv._handler(rdr, wrt))
-    #     # TODO: test incomplete. Mapping / Assertion must be added
-    #     # Connection must be closed
-    #     self.assertTrue(wrt.closed)
+    def testParseHeadersOnOff(self):
+        """Verify parameter parse_headers works"""
+        srv = server.webserver()
+        srv.add_route('/parse', self.dummy_handler, parse_headers=True)
+        srv.add_route('/noparse', self.dummy_handler, parse_headers=False)
+        rdr = mockReader(['GET /noparse HTTP/1.1\r\n',
+                          HDR('Host: blah.com'),
+                          HDR('Header1: lalalla'),
+                          HDR('Junk: junk.com'),
+                          HDRE])
+        # "Send" request with parsing off
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        self.assertTrue(self.dummy_called)
+        # Check for headers
+        self.assertEqual(self.dummy_req.headers, {})
+        self.assertTrue(wrt.closed)
+
+        # "Send" request with parsing on
+        rdr = mockReader(['GET /parse HTTP/1.1\r\n',
+                          HDR('Host: blah.com'),
+                          HDR('Header1: lalalla'),
+                          HDR('Junk: junk.com'),
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        self.assertTrue(self.dummy_called)
+        # Check for headers
+        hdrs = {b'Junk': b'junk.com',
+                b'Host': b'blah.com',
+                b'Header1': b'lalalla'}
+        self.assertEqual(self.dummy_req.headers, hdrs)
+        self.assertTrue(wrt.closed)
+
+    def testDisallowedMethod(self):
+        """Verify that server respects allowed methods"""
+        srv = server.webserver()
+        srv.add_route('/', self.hello_world_handler)
+        srv.add_route('/post_only', self.dummy_handler, methods=[server.POST])
+        rdr = mockReader(['GET / HTTP/1.0\r\n',
+                          HDRE])
+        # "Send" GET request, by default GET is enabled
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        self.assertEqual(wrt.history, self.hello_world_history)
+        self.assertTrue(wrt.closed)
+
+        # "Send" GET request to POST only location
+        self.dummy_called = False
+        rdr = mockReader(['GET /post_only HTTP/1.1\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        # Hanlder should not be called - method not allowed
+        self.assertFalse(self.dummy_called)
+        exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
+               'Content-Type: text/plain\r\n\r\n',
+               'HTTP 405 Method Not Allowed\r\n']
+        self.assertEqual(wrt.history, exp)
+        # Connection must be closed
+        self.assertTrue(wrt.closed)
 
     def testMalformedRequest(self):
         """Verify that malformed request generates proper response (http err)"""

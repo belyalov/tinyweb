@@ -33,6 +33,13 @@ http_status_codes = {200: 'OK',
                      413: 'Payload Too Large',
                      500: 'Internal Server Error'}
 
+GET = b'GET'
+POST = b'POST'
+PUT = b'PUT'
+HEAD = b'HEAD'
+DELETE = b'DELETE'
+OPTIONS = b'OPTIONS'
+
 
 def get_file_mime_type(fname):
     idx = fname.rfind('.')
@@ -173,13 +180,22 @@ class webserver:
             req = request(reader)
             resp = response(writer)
             yield from req.read_request_line()
-            handler, extra = self._find_url_handler(req)
+            # Find URL handler
+            handler, params = self._find_url_handler(req)
             if not handler:
                 # No URL handler found - HTTP 404
                 yield from resp.error(404)
                 return
-            # Handler found, read / parser HTTP headers
-            yield from req.read_headers()
+            # Ensure that HTTP method is allowed for this path
+            if req.method not in params['methods']:
+                yield from resp.error(405)
+                return
+            # Parse headers, if enabled for this URL
+            if params['parse_headers']:
+                yield from req.read_headers()
+            # Handle URL
+            yield from handler(req, resp)
+            # Done
         except MalformedHTTP as e:
             yield from resp.error(400)
         except Exception as e:
@@ -193,6 +209,12 @@ class webserver:
             raise ValueError('Empty URL is not allowed')
         if '?' in url:
             raise ValueError('URL must be simple, without query string')
+        # Inital params for route
+        params = {'methods': [GET],
+                  'parse_headers': True,
+                  'max_body_size': 1024,
+                  'auto_options_method': True}
+        params.update(kwargs)
         # If URL has a parameter
         if url.endswith('>'):
             idx = url.rfind('<')
@@ -203,12 +225,12 @@ class webserver:
             param = url[idx:-1]
             if path.encode() in self.parameterized_url_map:
                 raise ValueError('URL already exists')
-            kwargs['param_name'] = param
-            self.parameterized_url_map[path.encode()] = (f, kwargs)
+            params['param_name'] = param
+            self.parameterized_url_map[path.encode()] = (f, params)
 
         if url.encode() in self.explicit_url_map:
             raise ValueError('URL already exists')
-        self.explicit_url_map[url.encode()] = (f, kwargs)
+        self.explicit_url_map[url.encode()] = (f, params)
 
     def route(self, url, **kwargs):
         def _route(f):
