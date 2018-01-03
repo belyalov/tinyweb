@@ -1,6 +1,7 @@
 """
-Tiny Web - pretty simple and powerful web server / client for tiny platforms like ESP8266 / ESP32
+Tiny Web - pretty simple and powerful web server for tiny platforms like ESP8266 / ESP32
 MIT license
+(C) Konstantin Belyalov 2017-2018
 """
 import sys
 import uasyncio as asyncio
@@ -140,10 +141,10 @@ class response:
     def add_header(self, key, value):
         self.headers[key] = value
 
-    def add_access_control_headers(self, origins='*', methods='*', headers='*'):
-        self.add_header('Access-Control-Allow-Origin', origins)
-        self.add_header('Access-Control-Allow-Methods', methods)
-        self.add_header('Access-Control-Allow-Headers', headers)
+    def add_access_control_headers(self, params):
+        self.add_header('Access-Control-Allow-Origin', params['allowed_access_control_origins'])
+        self.add_header('Access-Control-Allow-Methods', params['allowed_access_control_methods'])
+        self.add_header('Access-Control-Allow-Headers', params['allowed_access_control_headers'])
 
     def start_html(self):
         self.add_header('Content-Type', 'text/html')
@@ -177,22 +178,34 @@ class webserver:
     def _handler(self, reader, writer):
         """Handler for HTTP connection"""
         try:
+            # Read HTTP Request Line
             req = request(reader)
             resp = response(writer)
             yield from req.read_request_line()
+
             # Find URL handler
             handler, params = self._find_url_handler(req)
             if not handler:
                 # No URL handler found - HTTP 404
                 yield from resp.error(404)
                 return
+
+            # OPTIONS method is handled automatically (if not disabled)
+            if params['auto_method_options'] and req.method == OPTIONS:
+                resp.add_access_control_headers(params)
+                yield from resp._send_response_line()
+                yield from resp._send_headers()
+                return
+
             # Ensure that HTTP method is allowed for this path
             if req.method not in params['methods']:
                 yield from resp.error(405)
                 return
+
             # Parse headers, if enabled for this URL
             if params['parse_headers']:
                 yield from req.read_headers()
+
             # Handle URL
             if hasattr(req, '_param'):
                 yield from handler(req, resp, req._param)
@@ -216,8 +229,13 @@ class webserver:
         params = {'methods': [GET],
                   'parse_headers': True,
                   'max_body_size': 1024,
-                  'auto_options_method': True}
+                  'auto_method_options': True,
+                  'allowed_access_control_headers': '*',
+                  'allowed_access_control_origins': '*',
+                  }
         params.update(kwargs)
+        # Pre-create list of methods for OPTIONS
+        params['allowed_access_control_methods'] = ' '.join([x.decode() for x in params['methods']])
         # If URL has a parameter
         if url.endswith('>'):
             idx = url.rfind('<')

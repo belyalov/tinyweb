@@ -1,6 +1,7 @@
 """
 Unittests for Tiny Web
 MIT license
+(C) Konstantin Belyalov 2017-2018
 """
 
 import unittest
@@ -355,6 +356,32 @@ class ServerFull(unittest.TestCase):
                'HTTP 405 Method Not Allowed\r\n']
         self.assertEqual(wrt.history, exp)
         # Connection must be closed
+        self.assertTrue(wrt.closed)
+
+    def testAutoOptionsMethod(self):
+        """Test auto implementation of OPTIONS method"""
+        srv = server.webserver()
+        srv.add_route('/', self.hello_world_handler, methods=[server.POST, server.PUT, server.DELETE])
+        srv.add_route('/disabled', self.hello_world_handler, auto_method_options=False)
+        rdr = mockReader(['OPTIONS / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+
+        exp = ['HTTP/1.0 200 OK\r\n',
+               'Access-Control-Allow-Headers: *\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST PUT DELETE\r\n\r\n']
+        self.assertEqual(wrt.history, exp)
+        self.assertTrue(wrt.closed)
+
+        # Ensure that feature disable works as well
+        rdr = mockReader(['OPTIONS /disabled HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
+               'Content-Type: text/plain\r\n\r\n',
+               'HTTP 405 Method Not Allowed\r\n']
+        self.assertEqual(wrt.history, exp)
         self.assertTrue(wrt.closed)
 
     def testMalformedRequest(self):
