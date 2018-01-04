@@ -265,6 +265,7 @@ class ServerFull(unittest.TestCase):
 
     def setUp(self):
         self.dummy_called = False
+        self.data = {}
         self.hello_world_history = ['HTTP/1.0 200 OK\r\n',
                                     'Content-Type: text/html\r\n\r\n',
                                     '<html><h1>Hello world</h1></html>']
@@ -324,6 +325,48 @@ class ServerFull(unittest.TestCase):
         run_generator(srv._handler(rdr, wrt))
         # Check extracted POST body
         self.assertEqual(self.data, b'12345')
+
+    def testRequestBodyJson(self):
+        """JSON encoded POST body"""
+        srv = server.webserver()
+        srv.add_route('/', self.dummy_post_handler, methods=['POST'])
+        rdr = mockReader(['POST / HTTP/1.1\r\n',
+                          HDR('Content-Type: application/json'),
+                          HDR('Content-Length: 10'),
+                          HDRE,
+                          '{"a": "b"}'])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        # Check parsed POST body
+        self.assertEqual(self.data, {'a': 'b'})
+
+    def testRequestBodyUrlencoded(self):
+        """Regular HTML form"""
+        srv = server.webserver()
+        srv.add_route('/', self.dummy_post_handler, methods=['POST'])
+        rdr = mockReader(['POST / HTTP/1.1\r\n',
+                          HDR('Content-Type: application/x-www-form-urlencoded'),
+                          HDR('Content-Length: 10'),
+                          HDRE,
+                          'a=b&c=%20d'])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        # Check parsed POST body
+        self.assertEqual(self.data, {'a': 'b', 'c': ' d'})
+
+    def testRequestBodyNegative(self):
+        """Regular HTML form"""
+        srv = server.webserver()
+        srv.add_route('/', self.dummy_post_handler, methods=['POST'])
+        rdr = mockReader(['POST / HTTP/1.1\r\n',
+                          HDR('Content-Type: application/json'),
+                          HDR('Content-Length: 9'),
+                          HDRE,
+                          'some junk'])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        # payload broken - HTTP 400 expected
+        self.assertEqual(wrt.history, ['HTTP/1.0 400 Bad Request\r\n', '\r\n'])
 
     def route_parameterized_handler(self, req, resp, user_name):
         yield from resp.start_html()

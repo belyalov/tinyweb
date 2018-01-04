@@ -105,7 +105,7 @@ class request:
             if ct == b'application/json':
                 return json.loads(data)
             elif ct == b'application/x-www-form-urlencoded':
-                return parse_query_string(data)
+                return parse_query_string(data.decode())
         except ValueError:
             # Re-generate exception for malformed form data
             raise HTTPException(400)
