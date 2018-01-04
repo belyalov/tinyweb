@@ -5,44 +5,42 @@ MIT license
 """
 import uasyncio as asyncio
 import ujson as json
+import gc
 
 
-GET = b'GET'
-POST = b'POST'
-PUT = b'PUT'
-HEAD = b'HEAD'
-DELETE = b'DELETE'
-OPTIONS = b'OPTIONS'
+def urldecode_plus(s):
+    """Decode urlencoded string and decode '+' char (convert to space)"""
+    s = s.replace('+', ' ')
+    arr1 = s.split('%')
+    arr2 = [arr1[0]]
+    for it in arr1[1:]:
+        if len(it) >= 2:
+            arr2.append(chr(int(it[:2], 16)) + it[2:])
+        elif len(it) == 0:
+            arr2.append('%')
+        else:
+            arr2.append(it)
+    return ''.join(arr2)
 
 
-# Supported methods for RESTful API class
-restful_methods = {GET: 'get',
-                   POST: 'post',
-                   PUT: 'put',
-                   DELETE: 'delete'}
+def parse_query_string(s):
+    """Parse urlencoded string into dict"""
+    res = {}
+    pairs = s.split('&')
+    for p in pairs:
+        vals = [urldecode_plus(x) for x in p.split('=', 1)]
+        if len(vals) == 1:
+            res[vals[0]] = ''
+        else:
+            res[vals[0]] = vals[1]
+    return res
 
 
-def get_file_mime_type(fname):
-    mime_types = {'.html': 'text/html',
-                  '.css': 'text/css',
-                  '.js': 'application/javascript',
-                  '.png': 'image/png',
-                  '.jpg': 'image/jpeg',
-                  '.jpeg': 'image/jpeg',
-                  '.gif': 'image/gif'}
-    idx = fname.rfind('.')
-    if idx == -1:
-        return 'text/plain'
-    ext = fname[idx:]
-    if ext not in mime_types:
-        return 'text/plain'
-    else:
-        return mime_types[ext]
+class HTTPException(Exception):
+    """HTTP based expections"""
 
-
-class MalformedHTTP(Exception):
-    """Exception for malformed HTTP Request (HTTP 400)"""
-    pass
+    def __init__(self, code=400):
+        self.code = code
 
 
 class request:
@@ -54,10 +52,6 @@ class request:
         self.method = b''
         self.path = b''
         self.query_string = b''
-
-    def __repr__(self):
-        return '{} {:s} {:s} {:s}\n{}'.format(self.__class__, self.method, self.path,
-                                              self.query_string, str(self.headers))
 
     def read_request_line(self):
         """Read and parser HTTP RequestLine, e.g.:
@@ -71,7 +65,7 @@ class request:
             break
         rl_frags = rl.split()
         if len(rl_frags) != 3:
-            raise MalformedHTTP()
+            raise HTTPException(400)
         self.method = rl_frags[0]
         url_frags = rl_frags[1].split(b'?', 1)
         self.path = url_frags[0]
@@ -88,8 +82,33 @@ class request:
                 break
             frags = line.split(b':', 1)
             if len(frags) != 2:
-                raise MalformedHTTP()
+                raise HTTPException(400)
             self.headers[frags[0]] = frags[1].strip()
+
+    def read_parse_form_data(self):
+        # TODO: Probably there is better solution how to handle
+        # request body, at least for simple urlencoded forms - by processing
+        # chunks instead of accumulating payload.
+        gc.collect()
+        if b'Content-Length' not in self.headers:
+            raise HTTPException(400)
+        size = int(self.headers[b'Content-Length'])
+        if size > self.params['max_body_size'] or size < 0:
+            raise HTTPException(413)
+        data = yield from self.reader.readexactly(size)
+        # Parse payload depending on content type
+        if b'Content-Type' not in self.headers:
+            # Unknown content type
+            return data
+        ct = self.headers[b'Content-Type']
+        try:
+            if ct == b'application/json':
+                return json.loads(data)
+            elif ct == b'application/x-www-form-urlencoded':
+                return parse_query_string(data)
+        except ValueError:
+            # Re-generate exception for malformed form data
+            raise HTTPException(400)
 
 
 class response:
@@ -112,8 +131,11 @@ class response:
                                   500: 'Internal Server Error'}
 
     def _send_response_line(self):
-        yield from self.send('HTTP/1.0 {} {}\r\n'.
-                             format(self.code, self.http_status_codes[self.code]))
+        if self.code in self.http_status_codes:
+            msg = self.http_status_codes[self.code]
+        else:
+            msg = 'NA'
+        yield from self.send('HTTP/1.0 {} {}\r\n'.format(self.code, msg))
 
     def _send_headers(self):
         # Because of usually we have only a few HTTP headers (2-5) it doesn't make sense
@@ -136,7 +158,7 @@ class response:
 
     def add_access_control_headers(self):
         self.add_header('Access-Control-Allow-Origin', self.params['allowed_access_control_origins'])
-        self.add_header('Access-Control-Allow-Methods', self.params['allowed_access_control_methods'])
+        self.add_header('Access-Control-Allow-Methods', b' '.join(self.params['methods']))
         self.add_header('Access-Control-Allow-Headers', self.params['allowed_access_control_headers'])
 
     def start_html(self):
@@ -187,6 +209,8 @@ class webserver:
 
     def _handler(self, reader, writer):
         """Handler for HTTP connection"""
+        gc.collect()
+
         try:
             # Read HTTP Request Line
             req = request(reader)
@@ -197,13 +221,12 @@ class webserver:
             handler, params = self._find_url_handler(req)
             if not handler:
                 # No URL handler found - HTTP 404
-                yield from resp.error(404)
-                return
+                raise HTTPException(404)
             req.params = params
             resp.params = params
 
             # OPTIONS method is handled automatically (if not disabled)
-            if params['auto_method_options'] and req.method == OPTIONS:
+            if req.method == b'OPTIONS':
                 resp.add_access_control_headers()
                 yield from resp._send_response_line()
                 yield from resp._send_headers()
@@ -211,23 +234,24 @@ class webserver:
 
             # Ensure that HTTP method is allowed for this path
             if req.method not in params['methods']:
-                yield from resp.error(405)
-                return
+                raise HTTPException(405)
 
             # Parse headers, if enabled for this URL
             if params['parse_headers']:
                 yield from req.read_headers()
 
             # Handle URL
+            gc.collect()
             if hasattr(req, '_param'):
                 yield from handler(req, resp, req._param)
             else:
                 yield from handler(req, resp)
             # Done
-        except MalformedHTTP as e:
-            yield from resp.error(400)
+        except HTTPException as e:
+            yield from resp.error(e.code)
         except Exception as e:
             yield from resp.error(500)
+            raise
         finally:
             yield from writer.aclose()
 
@@ -235,16 +259,15 @@ class webserver:
         if url == '' or '?' in url:
             raise ValueError('Invalid URL')
         # Inital params for route
-        params = {'methods': [GET],
+        params = {'methods': ['GET'],
                   'parse_headers': True,
                   'max_body_size': 1024,
-                  'auto_method_options': True,
                   'allowed_access_control_headers': '*',
                   'allowed_access_control_origins': '*',
                   }
         params.update(kwargs)
-        # Pre-create list of methods for OPTIONS
-        params['allowed_access_control_methods'] = ' '.join([x.decode() for x in params['methods']])
+        # Convert methods to bytestring
+        params['methods'] = [x.encode() for x in params['methods']]
         # If URL has a parameter
         if url.endswith('>'):
             idx = url.rfind('<')
@@ -264,10 +287,11 @@ class webserver:
         methods = []
         callmap = {}
         # Get all implemented HTTP methods in resource class
-        for m, a in restful_methods.items():
-            if hasattr(cls, a):
+        for m in ['GET', 'POST', 'PUT', 'DELETE']:
+            fn = m.lower()
+            if hasattr(cls, fn):
                 methods.append(m)
-                callmap[m] = getattr(cls, a)
+                callmap[m.encode()] = getattr(cls, fn)
         self.add_route(url, restful_resource_handler, methods=methods, _callmap=callmap, _class=cls)
 
     def route(self, url, **kwargs):

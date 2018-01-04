@@ -7,6 +7,9 @@ MIT license
 
 import unittest
 import tinyweb.server as server
+from tinyweb.static import get_file_mime_type
+from tinyweb.server import urldecode_plus, parse_query_string
+
 
 # Helpers
 
@@ -35,6 +38,9 @@ class mockReader():
         self.idx += 1
         # Convert and return str to bytes
         return self.lines[self.idx - 1].encode()
+
+    def readexactly(self, n):
+        return self.readline()
 
 
 class mockWriter():
@@ -66,13 +72,44 @@ def run_generator(gen):
 class Utils(unittest.TestCase):
 
     def testMimeTypes(self):
-        self.assertEqual(server.get_file_mime_type('a.html'), 'text/html')
-        self.assertEqual(server.get_file_mime_type('a.gif'), 'image/gif')
+        self.assertEqual(get_file_mime_type('a.html'), 'text/html')
+        self.assertEqual(get_file_mime_type('a.gif'), 'image/gif')
 
     def testMimeTypesUnknown(self):
         runs = ['', '.', 'bbb', 'bbb.bbbb', '/', ' ']
         for r in runs:
-            self.assertEqual('text/plain', server.get_file_mime_type(r))
+            self.assertEqual('text/plain', get_file_mime_type(r))
+
+    def testUrldecode(self):
+        runs = [('abc%20def', 'abc def'),
+                ('abc%%20def', 'abc% def'),
+                ('%%%', '%%%'),
+                ('%20%20', '  '),
+                ('abc', 'abc'),
+                ('a%25%25%25c', 'a%%%c'),
+                ('a++b', 'a  b'),
+                ('+%25+', ' % '),
+                ('+%2B+', ' + '),
+                ('%20+%2B+%41', '  + A'),
+                ]
+
+        for r in runs:
+            self.assertEqual(urldecode_plus(r[0]), r[1])
+
+    def testParseQueryString(self):
+        runs = [('k1=v2', {'k1': 'v2'}),
+                ('k1=v2&k11=v11', {'k1': 'v2',
+                                   'k11': 'v11'}),
+                ('k1=v2&k11=', {'k1': 'v2',
+                                'k11': ''}),
+                ('k1=+%20', {'k1': '  '}),
+                ('%6b1=+%20', {'k1': '  '}),
+                ('k1=%3d1', {'k1': '=1'}),
+                ('11=22%26&%3d=%3d', {'11': '22&',
+                                      '=': '='}),
+                ]
+        for r in runs:
+            self.assertEqual(parse_query_string(r[0]), r[1])
 
 
 class ServerParts(unittest.TestCase):
@@ -113,7 +150,7 @@ class ServerParts(unittest.TestCase):
                 ]
 
         for r in runs:
-            with self.assertRaises(server.MalformedHTTP):
+            with self.assertRaises(server.HTTPException):
                 req = server.request(mockReader(r))
                 run_generator(req.read_request_line())
 
@@ -253,8 +290,10 @@ class ServerFull(unittest.TestCase):
         self.dummy_called = True
         yield
 
+    def dummy_post_handler(self, req, resp):
+        self.data = yield from req.read_parse_form_data()
+
     def hello_world_handler(self, req, resp):
-        # handler for '/'
         yield from resp.start_html()
         yield from resp.send('<html><h1>Hello world</h1></html>')
 
@@ -271,6 +310,20 @@ class ServerFull(unittest.TestCase):
         # Ensure that proper response "sent"
         self.assertEqual(wrt.history, self.hello_world_history)
         self.assertTrue(wrt.closed)
+
+    def testRequestBodyUnknownType(self):
+        """Check Request Body correctness - usually comes with POST request"""
+        srv = server.webserver()
+        srv.add_route('/', self.dummy_post_handler, methods=['POST'])
+        rdr = mockReader(['POST / HTTP/1.1\r\n',
+                          HDR('Host: blah.com'),
+                          HDR('Content-Length: 5'),
+                          HDRE,
+                          '12345'])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        # Check extracted POST body
+        self.assertEqual(self.data, b'12345')
 
     def route_parameterized_handler(self, req, resp, user_name):
         yield from resp.start_html()
@@ -331,7 +384,7 @@ class ServerFull(unittest.TestCase):
         """Verify that server respects allowed methods"""
         srv = server.webserver()
         srv.add_route('/', self.hello_world_handler)
-        srv.add_route('/post_only', self.dummy_handler, methods=[server.POST])
+        srv.add_route('/post_only', self.dummy_handler, methods=['POST'])
         rdr = mockReader(['GET / HTTP/1.0\r\n',
                           HDRE])
         # "Send" GET request, by default GET is enabled
@@ -357,7 +410,7 @@ class ServerFull(unittest.TestCase):
     def testAutoOptionsMethod(self):
         """Test auto implementation of OPTIONS method"""
         srv = server.webserver()
-        srv.add_route('/', self.hello_world_handler, methods=[server.POST, server.PUT, server.DELETE])
+        srv.add_route('/', self.hello_world_handler, methods=['POST', 'PUT', 'DELETE'])
         srv.add_route('/disabled', self.hello_world_handler, auto_method_options=False)
         rdr = mockReader(['OPTIONS / HTTP/1.0\r\n',
                           HDRE])
@@ -365,17 +418,7 @@ class ServerFull(unittest.TestCase):
         run_generator(srv._handler(rdr, wrt))
 
         exp = ['HTTP/1.0 200 OK\r\n',
-               'Access-Control-Allow-Headers: *\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST PUT DELETE\r\n\r\n']
-        self.assertEqual(wrt.history, exp)
-        self.assertTrue(wrt.closed)
-
-        # Ensure that feature disable works as well
-        rdr = mockReader(['OPTIONS /disabled HTTP/1.0\r\n',
-                          HDRE])
-        wrt = mockWriter()
-        run_generator(srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
-               '\r\n']
+               "Access-Control-Allow-Headers: *\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: b'POST PUT DELETE'\r\n\r\n"]
         self.assertEqual(wrt.history, exp)
         self.assertTrue(wrt.closed)
 
@@ -419,7 +462,7 @@ class ServerResource(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 200 OK\r\n',
-               'Access-Control-Allow-Headers: *\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST GET\r\n\r\n']
+               "Access-Control-Allow-Headers: *\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: b'GET POST'\r\n\r\n"]
         self.assertEqual(wrt.history, exp)
 
         # 2. Positive case - GET
@@ -428,7 +471,7 @@ class ServerResource(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 200 OK\r\n',
-               'Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nContent-Length: 17\r\nAccess-Control-Allow-Methods: POST GET\r\nContent-Type: application/json\r\n\r\n',
+               "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nContent-Length: 17\r\nAccess-Control-Allow-Methods: b'GET POST'\r\nContent-Type: application/json\r\n\r\n",
                '{"data1": "junk"}']
         self.assertEqual(wrt.history, exp)
 
@@ -438,7 +481,7 @@ class ServerResource(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 200 OK\r\n',
-               'Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nContent-Length: 17\r\nAccess-Control-Allow-Methods: POST GET\r\nContent-Type: application/json\r\n\r\n',
+               "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nContent-Length: 17\r\nAccess-Control-Allow-Methods: b'GET POST'\r\nContent-Type: application/json\r\n\r\n",
                '{"data2": "junk"}']
         self.assertEqual(wrt.history, exp)
 
