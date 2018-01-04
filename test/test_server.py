@@ -6,9 +6,10 @@ MIT license
 """
 
 import unittest
-import tinyweb.server as server
+from tinyweb import webserver
 from tinyweb.static import get_file_mime_type
 from tinyweb.server import urldecode_plus, parse_query_string
+from tinyweb.server import request, HTTPException
 
 
 # Helpers
@@ -123,7 +124,7 @@ class ServerParts(unittest.TestCase):
 
         for r in runs:
             try:
-                req = server.request(mockReader(r[0]))
+                req = request(mockReader(r[0]))
                 run_generator(req.read_request_line())
                 self.assertEqual(r[1].encode(), req.method)
                 self.assertEqual(r[2].encode(), req.path)
@@ -133,7 +134,7 @@ class ServerParts(unittest.TestCase):
                 self.fail('exception on payload --{}--'.format(r[0]))
 
     def testRequestLineEmptyLinesBefore(self):
-        req = server.request(mockReader(['\n', '\r\n', 'GET /?a=a HTTP/1.1']))
+        req = request(mockReader(['\n', '\r\n', 'GET /?a=a HTTP/1.1']))
         run_generator(req.read_request_line())
         self.assertEqual(b'GET', req.method)
         self.assertEqual(b'/', req.path)
@@ -150,33 +151,33 @@ class ServerParts(unittest.TestCase):
                 ]
 
         for r in runs:
-            with self.assertRaises(server.HTTPException):
-                req = server.request(mockReader(r))
+            with self.assertRaises(HTTPException):
+                req = request(mockReader(r))
                 run_generator(req.read_request_line())
 
     def testHeadersSimple(self):
-        req = server.request(mockReader([HDR('Host: google.com'),
-                                         HDRE]))
+        req = request(mockReader([HDR('Host: google.com'),
+                                  HDRE]))
         run_generator(req.read_headers())
         self.assertEqual(req.headers, {b'Host': b'google.com'})
 
     def testHeadersSpaces(self):
-        req = server.request(mockReader([HDR('Host:    \t    google.com   \t     '),
-                                         HDRE]))
+        req = request(mockReader([HDR('Host:    \t    google.com   \t     '),
+                                  HDRE]))
         run_generator(req.read_headers())
         self.assertEqual(req.headers, {b'Host': b'google.com'})
 
     def testHeadersEmptyValue(self):
-        req = server.request(mockReader([HDR('Host:'),
-                                         HDRE]))
+        req = request(mockReader([HDR('Host:'),
+                                  HDRE]))
         run_generator(req.read_headers())
         self.assertEqual(req.headers, {b'Host': b''})
 
     def testHeadersMultiple(self):
-        req = server.request(mockReader([HDR('Host: google.com'),
-                                         HDR('Junk: you    blah'),
-                                         HDR('Content-type:      file'),
-                                         HDRE]))
+        req = request(mockReader([HDR('Host: google.com'),
+                                  HDR('Junk: you    blah'),
+                                  HDR('Content-type:      file'),
+                                  HDRE]))
         hdrs = {b'Host': b'google.com',
                 b'Junk': b'you    blah',
                 b'Content-type': b'file'}
@@ -190,32 +191,32 @@ class ServerParts(unittest.TestCase):
                 ('/aac', 5)]
         junk = ['//', '', '/a', '/aa', '/a/fhhfhfhfhfhf']
         # Create server, add routes
-        srv = server.webserver()
+        srv = webserver()
         for u in urls:
             srv.add_route(u[0], u[1])
         # Search them all
         for u in urls:
             # Create mock request object with "pre-parsed" url path
-            rq = server.request(mockReader([]))
+            rq = request(mockReader([]))
             rq.path = u[0].encode()
             f, args = srv._find_url_handler(rq)
             self.assertEqual(u[1], f)
         # Some simple negative cases
         for j in junk:
-            rq = server.request(mockReader([]))
+            rq = request(mockReader([]))
             rq.path = j.encode()
             f, args = srv._find_url_handler(rq)
             self.assertIsNone(f)
             self.assertIsNone(args)
 
     def testUrlFinderParameterized(self):
-        srv = server.webserver()
+        srv = webserver()
         # Add few routes
         srv.add_route('/', 0)
         srv.add_route('/<user_name>', 1)
         srv.add_route('/a/<id>', 2)
         # Check first url (non param)
-        rq = server.request(mockReader([]))
+        rq = request(mockReader([]))
         rq.path = b'/'
         f, args = srv._find_url_handler(rq)
         self.assertEqual(f, 0)
@@ -238,7 +239,7 @@ class ServerParts(unittest.TestCase):
         self.assertEqual(rq._param, '')
 
     def testUrlFinderNegative(self):
-        srv = server.webserver()
+        srv = webserver()
         # empty URL is not allowed
         with self.assertRaises(ValueError):
             srv.add_route('', 1)
@@ -252,7 +253,7 @@ class ServerParts(unittest.TestCase):
 
 
 # We want to test decorator @server.route as well
-server_for_decorators = server.webserver()
+server_for_decorators = webserver()
 
 
 @server_for_decorators.route('/uid/<user_id>')
@@ -300,7 +301,7 @@ class ServerFull(unittest.TestCase):
 
     def testStartHTML(self):
         """Verify that request.start_html() works well"""
-        srv = server.webserver()
+        srv = webserver()
         srv.add_route('/', self.hello_world_handler)
         rdr = mockReader(['GET / HTTP/1.1\r\n',
                           HDR('Host: blah.com'),
@@ -314,7 +315,7 @@ class ServerFull(unittest.TestCase):
 
     def testRequestBodyUnknownType(self):
         """Check Request Body correctness - usually comes with POST request"""
-        srv = server.webserver()
+        srv = webserver()
         srv.add_route('/', self.dummy_post_handler, methods=['POST'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Host: blah.com'),
@@ -328,7 +329,7 @@ class ServerFull(unittest.TestCase):
 
     def testRequestBodyJson(self):
         """JSON encoded POST body"""
-        srv = server.webserver()
+        srv = webserver()
         srv.add_route('/', self.dummy_post_handler, methods=['POST'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/json'),
@@ -342,7 +343,7 @@ class ServerFull(unittest.TestCase):
 
     def testRequestBodyUrlencoded(self):
         """Regular HTML form"""
-        srv = server.webserver()
+        srv = webserver()
         srv.add_route('/', self.dummy_post_handler, methods=['POST'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/x-www-form-urlencoded'),
@@ -356,7 +357,7 @@ class ServerFull(unittest.TestCase):
 
     def testRequestBodyNegative(self):
         """Regular HTML form"""
-        srv = server.webserver()
+        srv = webserver()
         srv.add_route('/', self.dummy_post_handler, methods=['POST'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/json'),
@@ -374,7 +375,7 @@ class ServerFull(unittest.TestCase):
 
     def testRouteParameterized(self):
         """Verify that route with params works fine"""
-        srv = server.webserver()
+        srv = webserver()
         srv.add_route('/db/<user_name>', self.route_parameterized_handler)
         rdr = mockReader(['GET /db/user1 HTTP/1.1\r\n',
                           HDR('Host: junk.com'),
@@ -391,7 +392,7 @@ class ServerFull(unittest.TestCase):
 
     def testParseHeadersOnOff(self):
         """Verify parameter parse_headers works"""
-        srv = server.webserver()
+        srv = webserver()
         srv.add_route('/parse', self.dummy_handler, parse_headers=True)
         srv.add_route('/noparse', self.dummy_handler, parse_headers=False)
         rdr = mockReader(['GET /noparse HTTP/1.1\r\n',
@@ -425,7 +426,7 @@ class ServerFull(unittest.TestCase):
 
     def testDisallowedMethod(self):
         """Verify that server respects allowed methods"""
-        srv = server.webserver()
+        srv = webserver()
         srv.add_route('/', self.hello_world_handler)
         srv.add_route('/post_only', self.dummy_handler, methods=['POST'])
         rdr = mockReader(['GET / HTTP/1.0\r\n',
@@ -452,7 +453,7 @@ class ServerFull(unittest.TestCase):
 
     def testAutoOptionsMethod(self):
         """Test auto implementation of OPTIONS method"""
-        srv = server.webserver()
+        srv = webserver()
         srv.add_route('/', self.hello_world_handler, methods=['POST', 'PUT', 'DELETE'])
         srv.add_route('/disabled', self.hello_world_handler, auto_method_options=False)
         rdr = mockReader(['OPTIONS / HTTP/1.0\r\n',
@@ -461,17 +462,19 @@ class ServerFull(unittest.TestCase):
         run_generator(srv._handler(rdr, wrt))
 
         exp = ['HTTP/1.0 200 OK\r\n',
-               "Access-Control-Allow-Headers: *\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: b'POST PUT DELETE'\r\n\r\n"]
+               'Access-Control-Allow-Headers: *\r\n'
+               'Access-Control-Allow-Origin: *\r\n'
+               "Access-Control-Allow-Methods: b'POST PUT DELETE'\r\n\r\n"]
         self.assertEqual(wrt.history, exp)
         self.assertTrue(wrt.closed)
 
     def testMalformedRequest(self):
-        """Verify that malformed request generates proper response (http err)"""
+        """Verify that malformed request generates proper response"""
         rdr = mockReader(['GET /\r\n',
                           HDR('Host: blah.com'),
                           HDRE])
         wrt = mockWriter()
-        srv = server.webserver()
+        srv = webserver()
         run_generator(srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 400 Bad Request\r\n',
                '\r\n']
@@ -496,7 +499,7 @@ class ServerResource(unittest.TestCase):
         pass
 
     def testGetPost(self):
-        srv = server.webserver()
+        srv = webserver()
         srv.add_resource(ResourceGetPost, '/')
         # Ensure that only GET method is allowed:
         # 1. Query OPTIONS for URL
@@ -505,7 +508,9 @@ class ServerResource(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 200 OK\r\n',
-               "Access-Control-Allow-Headers: *\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: b'GET POST'\r\n\r\n"]
+               "Access-Control-Allow-Headers: *\r\n"
+               "Access-Control-Allow-Origin: *\r\n"
+               "Access-Control-Allow-Methods: b'GET POST'\r\n\r\n"]
         self.assertEqual(wrt.history, exp)
 
         # 2. Positive case - GET
@@ -514,7 +519,11 @@ class ServerResource(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 200 OK\r\n',
-               "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nContent-Length: 17\r\nAccess-Control-Allow-Methods: b'GET POST'\r\nContent-Type: application/json\r\n\r\n",
+               'Access-Control-Allow-Origin: *\r\n'
+               'Access-Control-Allow-Headers: *\r\n'
+               'Content-Length: 17\r\n'
+               "Access-Control-Allow-Methods: b'GET POST'\r\n"
+               'Content-Type: application/json\r\n\r\n',
                '{"data1": "junk"}']
         self.assertEqual(wrt.history, exp)
 
@@ -524,7 +533,11 @@ class ServerResource(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 200 OK\r\n',
-               "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nContent-Length: 17\r\nAccess-Control-Allow-Methods: b'GET POST'\r\nContent-Type: application/json\r\n\r\n",
+               'Access-Control-Allow-Origin: *\r\n'
+               'Access-Control-Allow-Headers: *\r\n'
+               'Content-Length: 17\r\n'
+               "Access-Control-Allow-Methods: b'GET POST'\r\n"
+               'Content-Type: application/json\r\n\r\n',
                '{"data2": "junk"}']
         self.assertEqual(wrt.history, exp)
 
