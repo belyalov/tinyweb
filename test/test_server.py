@@ -369,6 +369,20 @@ class ServerFull(unittest.TestCase):
         # payload broken - HTTP 400 expected
         self.assertEqual(wrt.history, ['HTTP/1.0 400 Bad Request\r\n', '\r\n'])
 
+    def testRequestLargeBody(self):
+        """Max Body size check"""
+        srv = webserver()
+        srv.add_route('/', self.dummy_post_handler, methods=['POST'], max_body_size=5)
+        rdr = mockReader(['POST / HTTP/1.1\r\n',
+                          HDR('Content-Type: application/json'),
+                          HDR('Content-Length: 9'),
+                          HDRE,
+                          'some junk'])
+        wrt = mockWriter()
+        run_generator(srv._handler(rdr, wrt))
+        # payload broken - HTTP 400 expected
+        self.assertEqual(wrt.history, ['HTTP/1.0 413 Payload Too Large\r\n', '\r\n'])
+
     def route_parameterized_handler(self, req, resp, user_name):
         yield from resp.start_html()
         yield from resp.send('<html>Hello, {}</html>'.format(user_name))
@@ -464,7 +478,7 @@ class ServerFull(unittest.TestCase):
         exp = ['HTTP/1.0 200 OK\r\n',
                'Access-Control-Allow-Headers: *\r\n'
                'Access-Control-Allow-Origin: *\r\n'
-               "Access-Control-Allow-Methods: b'POST PUT DELETE'\r\n\r\n"]
+               'Access-Control-Allow-Methods: POST PUT DELETE\r\n\r\n']
         self.assertEqual(wrt.history, exp)
         self.assertTrue(wrt.closed)
 
@@ -490,62 +504,85 @@ class ResourceGetPost():
         return {"data1": "junk"}
 
     def post(self, data):
-        return {"data2": "junk"}
+        return data
+
+
+class ResourceGetParam():
+    """Parameterized REST API resource"""
+
+    def get(self, data, user_id):
+        return {"user_id": user_id}
 
 
 class ServerResource(unittest.TestCase):
 
     def setUp(self):
-        pass
+        self.srv = webserver()
+        self.srv.add_resource(ResourceGetPost, '/')
+        self.srv.add_resource(ResourceGetParam, '/param/<user_id>')
 
-    def testGetPost(self):
-        srv = webserver()
-        srv.add_resource(ResourceGetPost, '/')
-        # Ensure that only GET method is allowed:
-        # 1. Query OPTIONS for URL
+    def testOptions(self):
+        # Ensure that only GET/POST methods are allowed:
         rdr = mockReader(['OPTIONS / HTTP/1.0\r\n',
                           HDRE])
         wrt = mockWriter()
-        run_generator(srv._handler(rdr, wrt))
+        run_generator(self.srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 200 OK\r\n',
-               "Access-Control-Allow-Headers: *\r\n"
-               "Access-Control-Allow-Origin: *\r\n"
-               "Access-Control-Allow-Methods: b'GET POST'\r\n\r\n"]
+               'Access-Control-Allow-Headers: *\r\n'
+               'Access-Control-Allow-Origin: *\r\n'
+               'Access-Control-Allow-Methods: GET POST\r\n\r\n']
         self.assertEqual(wrt.history, exp)
 
-        # 2. Positive case - GET
+    def testGet(self):
         rdr = mockReader(['GET / HTTP/1.0\r\n',
                           HDRE])
         wrt = mockWriter()
-        run_generator(srv._handler(rdr, wrt))
+        run_generator(self.srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 200 OK\r\n',
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 17\r\n'
-               "Access-Control-Allow-Methods: b'GET POST'\r\n"
+               'Access-Control-Allow-Methods: GET POST\r\n'
                'Content-Type: application/json\r\n\r\n',
                '{"data1": "junk"}']
         self.assertEqual(wrt.history, exp)
 
-        # 3. Positive case - POST
-        rdr = mockReader(['POST / HTTP/1.0\r\n',
+    def testGetWithParam(self):
+        rdr = mockReader(['GET /param/123 HTTP/1.0\r\n',
                           HDRE])
         wrt = mockWriter()
-        run_generator(srv._handler(rdr, wrt))
+        run_generator(self.srv._handler(rdr, wrt))
+        exp = ['HTTP/1.0 200 OK\r\n',
+               'Access-Control-Allow-Origin: *\r\n'
+               'Access-Control-Allow-Headers: *\r\n'
+               'Content-Length: 18\r\n'
+               'Access-Control-Allow-Methods: GET\r\n'
+               'Content-Type: application/json\r\n\r\n',
+               '{"user_id": "123"}']
+        self.assertEqual(wrt.history, exp)
+
+    def testPost(self):
+        rdr = mockReader(['POST / HTTP/1.0\r\n',
+                          HDR('Content-Length: 17'),
+                          HDR('Content-Type: application/json'),
+                          HDRE,
+                          '{"body": "body1"}'])
+        wrt = mockWriter()
+        run_generator(self.srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 200 OK\r\n',
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 17\r\n'
-               "Access-Control-Allow-Methods: b'GET POST'\r\n"
+               'Access-Control-Allow-Methods: GET POST\r\n'
                'Content-Type: application/json\r\n\r\n',
-               '{"data2": "junk"}']
+               '{"body": "body1"}']
         self.assertEqual(wrt.history, exp)
 
-        # 4. Negative case - no such method implemented
+    def testInvalidMethod(self):
         rdr = mockReader(['PUT / HTTP/1.0\r\n',
                           HDRE])
         wrt = mockWriter()
-        run_generator(srv._handler(rdr, wrt))
+        run_generator(self.srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
                '\r\n']
         self.assertEqual(wrt.history, exp)

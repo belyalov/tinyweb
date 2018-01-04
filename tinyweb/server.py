@@ -91,7 +91,7 @@ class request:
         # chunks instead of accumulating payload.
         gc.collect()
         if b'Content-Length' not in self.headers:
-            raise HTTPException(400)
+            return None
         size = int(self.headers[b'Content-Length'])
         if size > self.params['max_body_size'] or size < 0:
             raise HTTPException(413)
@@ -158,7 +158,7 @@ class response:
 
     def add_access_control_headers(self):
         self.add_header('Access-Control-Allow-Origin', self.params['allowed_access_control_origins'])
-        self.add_header('Access-Control-Allow-Methods', b' '.join(self.params['methods']))
+        self.add_header('Access-Control-Allow-Methods', self.params['allowed_access_control_methods'])
         self.add_header('Access-Control-Allow-Headers', self.params['allowed_access_control_headers'])
 
     def start_html(self):
@@ -167,12 +167,23 @@ class response:
         yield from self._send_headers()
 
 
-def restful_resource_handler(req, resp):
+def restful_resource_handler(req, resp, param=None):
     """Handler for RESTful API endpoins"""
     # Gather data - query string, JSON in request body...
-    data = {'a': 1}
+    data = yield from req.read_parse_form_data()
     # Call actual handler
-    res = req.params['_callmap'][req.method](req.params['_class'], data)
+    if param:
+        res = req.params['_callmap'][req.method](req.params['_class'], data, param)
+    else:
+        res = req.params['_callmap'][req.method](req.params['_class'], data)
+    # Result could be a tuple or just single dictionary, e.g.:
+    # res = {'blah': 'blah'}
+    # res = {'blah': 'blah'}, 201
+    if type(res) == tuple:
+        resp.code = res[1]
+        res = res[0]
+    elif res is None:
+        raise Exception('Restful handler must return tuple/dict')
 
     # Send response
     res_str = json.dumps(res)
@@ -266,6 +277,7 @@ class webserver:
                   'allowed_access_control_origins': '*',
                   }
         params.update(kwargs)
+        params['allowed_access_control_methods'] = ' '.join(params['methods'])
         # Convert methods to bytestring
         params['methods'] = [x.encode() for x in params['methods']]
         # If URL has a parameter
