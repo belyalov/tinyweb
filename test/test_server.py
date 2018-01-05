@@ -6,8 +6,9 @@ MIT license
 """
 
 import unittest
+import os
 from tinyweb import webserver
-from tinyweb.static import get_file_mime_type
+from tinyweb.static import get_file_mime_type, send_file
 from tinyweb.server import urldecode_plus, parse_query_string
 from tinyweb.server import request, HTTPException
 
@@ -52,10 +53,12 @@ class mockWriter():
         self.closed = False
 
     def awrite(self, buf, off=0, sz=-1):
+        if sz == -1:
+            sz = len(buf) - off
         # Make this function to be as generator
         yield
         # Save biffer into history - so to be able to assert then
-        self.history.append(buf)
+        self.history.append(buf[:sz])
 
     def aclose(self):
         yield
@@ -586,6 +589,68 @@ class ServerResource(unittest.TestCase):
         exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
                '\r\n']
         self.assertEqual(wrt.history, exp)
+
+
+class StaticContent(unittest.TestCase):
+
+    def setUp(self):
+        self.srv = webserver()
+        self.tempfn = '__tmp.html'
+        self.ctype = None
+        with open(self.tempfn, 'wb') as f:
+            f.write('someContent blah blah')
+
+    def tearDown(self):
+        try:
+            os.remove(self.tempfn)
+        except OSError:
+            pass
+
+    def send_file_handler(self, req, resp):
+        yield from send_file(resp, self.tempfn, self.ctype)
+
+    def testSendFileAutoMime(self):
+        """Verify send_file feature with auto mime type"""
+        self.srv.add_route('/', self.send_file_handler)
+        rdr = mockReader(['GET / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(self.srv._handler(rdr, wrt))
+
+        exp = ['HTTP/1.0 200 OK\r\n',
+               'Content-Length: 21\r\nContent-Type: text/html\r\n\r\n',
+               bytearray(b'someContent blah blah')]
+        self.assertEqual(wrt.history, exp)
+        self.assertTrue(wrt.closed)
+
+    def testSendFileManualMime(self):
+        """Verify send_file feature with auto mime type"""
+        self.ctype = 'text/plain'
+        self.srv.add_route('/', self.send_file_handler)
+        rdr = mockReader(['GET / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(self.srv._handler(rdr, wrt))
+
+        exp = ['HTTP/1.0 200 OK\r\n',
+               'Content-Length: 21\r\nContent-Type: text/plain\r\n\r\n',
+               bytearray(b'someContent blah blah')]
+        self.assertEqual(wrt.history, exp)
+        self.assertTrue(wrt.closed)
+
+    def testSendFileNotFound(self):
+        """Verify 404 error for non existing files"""
+        self.srv.add_route('/', self.send_file_handler)
+        rdr = mockReader(['GET / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+
+        # Intentionally delete file before request
+        os.remove(self.tempfn)
+        run_generator(self.srv._handler(rdr, wrt))
+
+        self.assertEqual(wrt.history, ['HTTP/1.0 404 Not Found\r\n', '\r\n'])
+        self.assertTrue(wrt.closed)
 
 
 if __name__ == '__main__':
