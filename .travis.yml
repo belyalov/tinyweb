@@ -8,7 +8,7 @@ install:
   - cd ./micropython/ports/unix
   - make axtls
   - sudo make install
-  - micropython -m upip install micropython-uasyncio micropython-unittest
+  - micropython -m upip install micropython-uasyncio micropython-unittest micropython-os
   - cd ../../../
   - ln -sf `pwd`/tinyweb/ ~/.micropython/lib/tinyweb
   - ls -la
