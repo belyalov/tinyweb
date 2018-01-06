@@ -16,7 +16,7 @@ app = tinyweb.webserver()
 @app.route('/index.html')
 def index(request, response):
     # Just send file
-    yield from send_file(response, 'static/index.html')
+    yield from send_file(response, 'static/index.simple.html')
 
 
 # Images

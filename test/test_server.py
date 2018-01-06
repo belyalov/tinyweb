@@ -349,7 +349,7 @@ class ServerFull(unittest.TestCase):
         srv = webserver()
         srv.add_route('/', self.dummy_post_handler, methods=['POST'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
-                          HDR('Content-Type: application/x-www-form-urlencoded'),
+                          HDR('Content-Type: application/x-www-form-urlencoded; charset=UTF-8'),
                           HDR('Content-Length: 10'),
                           HDRE,
                           'a=b&c=%20d'])

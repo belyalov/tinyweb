@@ -100,7 +100,9 @@ class request:
         if b'Content-Type' not in self.headers:
             # Unknown content type
             return data
-        ct = self.headers[b'Content-Type']
+        # Use only string before ';', e.g:
+        # application/x-www-form-urlencoded; charset=UTF-8
+        ct = self.headers[b'Content-Type'].split(b';', 1)[0]
         try:
             if ct == b'application/json':
                 return json.loads(data)
