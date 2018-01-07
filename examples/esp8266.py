@@ -25,7 +25,7 @@ app = tinyweb.server.webserver()
 @app.route('/')
 @app.route('/index.html')
 def index(req, resp):
-    yield from send_file(resp, 'static/index.html')
+    yield from send_file(req, resp, 'static/index.html')
 
 
 # JS files.
@@ -34,7 +34,7 @@ def index(req, resp):
 @app.route('/js/<fn>')
 def files_js(req, resp, fn):
     resp.add_header('Content-Encoding', 'gzip')
-    yield from send_file(resp, 'static/js/{}.gz'.format(fn), 'application/javascript')
+    yield from send_file(req, resp, 'static/js/{}.gz'.format(fn), 'application/javascript')
 
 
 # The same for css files - e.g.
@@ -42,13 +42,13 @@ def files_js(req, resp, fn):
 @app.route('/css/<fn>')
 def files_css(req, resp, fn):
     resp.add_header('Content-Encoding', 'gzip')
-    yield from send_file(resp, 'static/css/{}.gz'.format(fn), 'text/css')
+    yield from send_file(req, resp, 'static/css/{}.gz'.format(fn), 'text/css')
 
 
 # Images
 @app.route('/images/<fn>')
 def files_images(req, resp, fn):
-    yield from send_file(resp, 'static/images/{}'.format(fn))
+    yield from send_file(req, resp, 'static/images/{}'.format(fn))
 
 
 # RESTAPI: System status

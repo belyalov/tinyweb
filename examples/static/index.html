@@ -58,7 +58,7 @@
                 <tbody>
                   <tr>
                     <td>Free</td>
-                    <td id=mem_free>...</td>
+                    <td id=mem_free style="font-weight: bold">...</td>
                   </tr>
                   <tr>
                     <td>Allocated</td>
@@ -134,7 +134,7 @@
                 <td>...</td>
                 <td>...</td>
                 <td>...</td>
-                <td><button type="button" class="btn btn-secondary" pin=1>Turn Off</button></td>
+                <td>...</td>
               </tr>
             </tbody>
           </table>
@@ -152,7 +152,8 @@
       function update_status(data)
       {
           $.each(data["memory"], function(key, val) {
-            $("#" + key).text(val);
+            var m = parseFloat(val / 1000).toFixed(2);
+            $("#" + key).text(m + 'k');
           });
           $.each(data["network"], function(key, val) {
             $("#" + key).text(val);

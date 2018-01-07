@@ -28,16 +28,16 @@ app = tinyweb.webserver()
 # Index page (just to be sure - let's handle most popular index links)
 @app.route('/')
 @app.route('/index.html')
-def index(request, response):
+def index(req, resp):
     # Just send file - you don't need to worry about content type
-    yield from send_file(response, 'static/index.simple.html')
+    yield from send_file(req, resp, 'static/index.simple.html')
 
 
 # Images
 @app.route('/images/<fn>')
-def images(request, response, fn):
+def images(req, resp, fn):
     # Send picture. Filename - in just a parameter
-    yield from send_file(response, 'static/images/{}'.format(fn))
+    yield from send_file(req, resp, 'static/images/{}'.format(fn))
 
 
 if __name__ == '__main__':

@@ -16,14 +16,14 @@ app = tinyweb.webserver()
 @app.route('/index.html')
 def index(request, response):
     # Just send file
-    yield from send_file(response, 'static/index.simple.html')
+    yield from send_file(request, response, 'static/index.simple.html')
 
 
 # Images
 @app.route('/images/<fn>')
 def images(request, response, fn):
     # Send picture. Filename - in parameter
-    yield from send_file(response, 'static/images/{}'.format(fn))
+    yield from send_file(request, response, 'static/images/{}'.format(fn))
 
 
 if __name__ == '__main__':

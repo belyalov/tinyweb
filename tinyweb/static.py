@@ -25,14 +25,21 @@ def get_file_mime_type(fname):
         return mime_types[ext]
 
 
-def send_file(resp, filename, content_type=None):
+def send_file(req, resp, filename, content_type=None, max_age=2592000):
     """Send file contents"""
-    if not content_type:
-        content_type = get_file_mime_type(filename)
-    resp.add_header('Content-Type', content_type)
     try:
+        # Get file size
         stat = os.stat(filename)
-        resp.add_header('Content-Length', str(stat[6]))
+        slen = str(stat[6])
+        resp.add_header('Content-Length', slen)
+        # Find content type
+        if not content_type:
+            content_type = get_file_mime_type(filename)
+        resp.add_header('Content-Type', content_type)
+        # Since this is static content is totally make sense
+        # to tell browser to cache it, however, you can always
+        # override it by setting max_age to zero
+        resp.add_header('Cache-Control', 'max-age={}, public'.format(max_age))
         with open(filename) as f:
             yield from resp._send_response_line()
             yield from resp._send_headers()
