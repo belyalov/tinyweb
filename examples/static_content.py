@@ -4,7 +4,6 @@ MIT license
 (C) Konstantin Belyalov 2017-2018
 """
 import tinyweb
-from tinyweb.static import send_file
 
 
 # Create web server application
@@ -14,16 +13,16 @@ app = tinyweb.webserver()
 # Index page
 @app.route('/')
 @app.route('/index.html')
-def index(request, response):
+def index(req, resp):
     # Just send file
-    yield from send_file(request, response, 'static/index.simple.html')
+    yield from resp.send_file('static/index.simple.html')
 
 
 # Images
 @app.route('/images/<fn>')
-def images(request, response, fn):
+def images(req, resp, fn):
     # Send picture. Filename - in parameter
-    yield from send_file(request, response, 'static/images/{}'.format(fn))
+    yield from resp.send_file('static/images/{}'.format(fn))
 
 
 if __name__ == '__main__':

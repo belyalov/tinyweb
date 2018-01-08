@@ -18,7 +18,6 @@ By itself - *tinyweb* is just simple TCP server which runs in top of **uasyncio*
 Let's develop pretty simple static web application:
 ```python
 import tinyweb
-from tinyweb.static import send_file
 
 
 # Create web server application
@@ -30,14 +29,14 @@ app = tinyweb.webserver()
 @app.route('/index.html')
 def index(req, resp):
     # Just send file - you don't need to worry about content type
-    yield from send_file(req, resp, 'static/index.simple.html')
+    yield from resp.send_file('static/index.simple.html')
 
 
 # Images
 @app.route('/images/<fn>')
 def images(req, resp, fn):
     # Send picture. Filename - in just a parameter
-    yield from send_file(req, resp, 'static/images/{}'.format(fn))
+    yield from resp.send_file('static/images/{}'.format(fn))
 
 
 if __name__ == '__main__':
