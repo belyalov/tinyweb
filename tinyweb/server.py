@@ -10,7 +10,10 @@ import os
 
 
 def urldecode_plus(s):
-    """Decode urlencoded string and decode '+' char (convert to space)"""
+    """Decode urlencoded string (including '+' char).
+
+    Returns decoded string
+    """
     s = s.replace('+', ' ')
     arr1 = s.split('%')
     arr2 = [arr1[0]]
@@ -25,7 +28,10 @@ def urldecode_plus(s):
 
 
 def parse_query_string(s):
-    """Parse urlencoded string into dict"""
+    """Parse urlencoded string andinto dict.
+
+    Returns dict
+    """
     res = {}
     pairs = s.split('&')
     for p in pairs:
@@ -38,6 +44,10 @@ def parse_query_string(s):
 
 
 def get_file_mime_type(fname):
+    """Get MIME type by filename extension.
+
+    Returns string
+    """
     mime_types = {'.html': 'text/html',
                   '.css': 'text/css',
                   '.js': 'application/javascript',
@@ -56,7 +66,7 @@ def get_file_mime_type(fname):
 
 
 class HTTPException(Exception):
-    """HTTP based expections"""
+    """HTTP protocol expections"""
 
     def __init__(self, code=400):
         self.code = code
@@ -73,8 +83,11 @@ class request:
         self.query_string = b''
 
     def read_request_line(self):
-        """Read and parser HTTP RequestLine, e.g.:
-            GET /something/script?param1=val1 HTTP/1.1
+        """Read and parse first line (AKA HTTP Request Line).
+        Function is generator.
+
+        Request line is something like:
+        GET /something/script?param1=val1 HTTP/1.1
         """
         while True:
             rl = yield from self.reader.readline()
@@ -92,8 +105,13 @@ class request:
             self.query_string = url_frags[1]
 
     def read_headers(self):
-        """Reads and parses HTTP headers, e.g.:
-            Host: google.com
+        """Read and parse HTTP headers until \r\n\r\n:
+        Function is generator.
+
+        HTTP headers are:
+        Host: google.com
+        Content-Type: blah
+        \r\n
         """
         while True:
             line = yield from self.reader.readline()
@@ -105,6 +123,13 @@ class request:
             self.headers[frags[0]] = frags[1].strip()
 
     def read_parse_form_data(self):
+        """Read HTTP form data (payload), if any.
+        Function is generator.
+
+        Returns:
+            - dict of key / value pairs
+            - None in case of no form data present
+        """
         # TODO: Probably there is better solution how to handle
         # request body, at least for simple urlencoded forms - by processing
         # chunks instead of accumulating payload.
@@ -152,6 +177,9 @@ class response:
                                   500: 'Internal Server Error'}
 
     def _send_response_line(self):
+        """Compose and send HTTP response line.
+        Function is generator.
+        """
         if self.code in self.http_status_codes:
             msg = self.http_status_codes[self.code]
         else:
@@ -159,6 +187,9 @@ class response:
         yield from self.send('HTTP/1.0 {} {}\r\n'.format(self.code, msg))
 
     def _send_headers(self):
+        """Compose and send HTTP headers following by \r\n.
+        This function is generator.
+        """
         # Because of usually we have only a few HTTP headers (2-5) it doesn't make sense
         # to send them separately - sometimes it could increase latency.
         # So combining headers together and send them as single "packet".
@@ -170,25 +201,73 @@ class response:
         yield from self.send('\r\n'.join(hdrs))
 
     def error(self, code):
+        """Generate HTTP error response
+        This function is generator.
+
+        Arguments:
+            code - HTTP response code
+
+        Example:
+            # Not enough permissions. Send HTTP 403 - Forbidden
+            yield from resp.error(403)
+        """
         self.code = code
         yield from self._send_response_line()
         yield from self.send('\r\n')
 
     def add_header(self, key, value):
+        """Add HTTP response header
+
+        Arguments:
+            key - header name
+            value - header value
+
+        Example:
+            resp.add_header('Content-Encoding', 'gzip')
+        """
         self.headers[key] = value
 
     def add_access_control_headers(self):
+        """Add Access Control related HTTP response headers.
+        This is required when working with RestApi (JSON requests)
+        """
         self.add_header('Access-Control-Allow-Origin', self.params['allowed_access_control_origins'])
         self.add_header('Access-Control-Allow-Methods', self.params['allowed_access_control_methods'])
         self.add_header('Access-Control-Allow-Headers', self.params['allowed_access_control_headers'])
 
     def start_html(self):
+        """Start response with HTML content type.
+        This function is generator.
+
+        Example:
+            yield from resp.start_html()
+            yield from resp.send('<html><h1>Hello, world!</h1></html>')
+        """
         self.add_header('Content-Type', 'text/html')
         yield from self._send_response_line()
         yield from self._send_headers()
 
     def send_file(self, filename, content_type=None, max_age=2592000):
-        """Send file contents"""
+        """Send local file as HTTP response.
+        This function is generator.
+
+        Arguments:
+            filename - Name of file which exists in local filesystem
+        Keyword arguments:
+            content_type - Filetype. By default - None means auto-detect.
+            max_age - Cache control. How long browser can keep this file on disk.
+                      By default - 30 days
+                      Set to 0 - to disable caching.
+
+        Example 1: Default use case:
+            yield from resp.send_file('images/cat.jpg')
+
+        Example 2: Disable caching:
+            yield from resp.send_file('static/index.html', max_age=0)
+
+        Example 3: Override content type:
+            yield from resp.send_file('static/file.bin', content_type='application/octet-stream')
+        """
         try:
             # Get file size
             stat = os.stat(filename)
@@ -252,7 +331,8 @@ class webserver:
 
     def _find_url_handler(self, req):
         """Helper to find URL handler.
-           Returns tuple of (function, opts, param) or (None, None) if not found."""
+        Returns tuple of (function, opts, param) or (None, None) if not found.
+        """
         # First try - lookup in explicit (non parameterized URLs)
         if req.path in self.explicit_url_map:
             return self.explicit_url_map[req.path]
@@ -267,7 +347,9 @@ class webserver:
         return (None, None)
 
     def _handler(self, reader, writer):
-        """Handler for HTTP connection"""
+        """Handler for TCP connection with
+        HTTP/1.0 protocol implementation
+        """
         gc.collect()
 
         try:
@@ -315,6 +397,19 @@ class webserver:
             yield from writer.aclose()
 
     def add_route(self, url, f, **kwargs):
+        """Add URL to function mapping.
+
+        Arguments:
+            url - url to map function with
+            f - function to map
+
+        Keyword arguments:
+            methods - list of allowed methods. Defaults to ['GET', 'POST']
+            parse_headers - turn on / off HTTP request header parsing. Default - True
+            max_body_size - Max HTTP body size (e.g. POST form data). Defaults to 1024
+            allowed_access_control_headers - Default value for the same name header. Defaults to *
+            allowed_access_control_origins - Default value for the same name header. Defaults to *
+        """
         if url == '' or '?' in url:
             raise ValueError('Invalid URL')
         # Inital params for route
@@ -344,6 +439,20 @@ class webserver:
         self.explicit_url_map[url.encode()] = (f, params)
 
     def add_resource(self, cls, url):
+        """Map resource (RestAPI) to URL
+
+        Arguments:
+            cls - Resource class to map to
+            url - url to map to class
+
+        Example:
+            class myres():
+                def get(self, data):
+                    return {'hello': 'world'}
+
+
+            app.add_resource(myres, '/api/myres')
+        """
         methods = []
         callmap = {}
         # Get all implemented HTTP methods in resource class
@@ -355,12 +464,28 @@ class webserver:
         self.add_route(url, restful_resource_handler, methods=methods, _callmap=callmap, _class=cls)
 
     def route(self, url, **kwargs):
+        """Decorator for add_route()
+
+        Example:
+            @app.route('/')
+            def index(req, resp):
+                yield from resp.start_html()
+                yield from resp.send('<html><body><h1>Hello, world!</h1></html>\n')
+        """
         def _route(f):
             self.add_route(url, f, **kwargs)
             return f
         return _route
 
-    def run(self, host="127.0.0.1", port=8081, loop_forever=True, backlog=16):
+    def run(self, host="127.0.0.1", port=8081, loop_forever=True, backlog=10):
+        """Run Web Server. By default it runs forever.
+
+        Keyword arguments:
+            host - host to listen on. By default - localhost (127.0.0.1)
+            port - port to listen on. By default - 8081
+            loop_forever - run async.loop_forever(). Defaults to True
+            backlog - size of pending connections queue. Defaults to 10
+        """
         loop = asyncio.get_event_loop()
         print("* Starting Web Server at {}:{}".format(host, port))
         loop.create_task(asyncio.start_server(self._handler, host, port, backlog=backlog))
