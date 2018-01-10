@@ -331,7 +331,7 @@ class ServerFull(unittest.TestCase):
         self.assertTrue(wrt.closed)
 
     def testRequestBodyUnknownType(self):
-        """Check Request Body correctness - usually comes with POST request"""
+        """Unknow HTTP body test - empty dict expected"""
         srv = webserver()
         srv.add_route('/', self.dummy_post_handler, methods=['POST'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
@@ -342,7 +342,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         # Check extracted POST body
-        self.assertEqual(self.data, b'12345')
+        self.assertEqual(self.data, {})
 
     def testRequestBodyJson(self):
         """JSON encoded POST body"""
@@ -518,7 +518,7 @@ class ResourceGetPost():
     """Simple REST API resource class with just two methods"""
 
     def get(self, data):
-        return {"data1": "junk"}
+        return {'data1': 'junk'}
 
     def post(self, data):
         return data
@@ -527,8 +527,11 @@ class ResourceGetPost():
 class ResourceGetParam():
     """Parameterized REST API resource"""
 
+    def __init__(self):
+        self.user_id = 'user_id'
+
     def get(self, data, user_id):
-        return {"user_id": user_id}
+        return {self.user_id: user_id}
 
 
 class ServerResource(unittest.TestCase):
@@ -579,7 +582,8 @@ class ServerResource(unittest.TestCase):
         self.assertEqual(wrt.history, exp)
 
     def testPost(self):
-        rdr = mockReader(['POST / HTTP/1.0\r\n',
+        # Ensure that parameters from query string / body will be combined as well
+        rdr = mockReader(['POST /?qs=qs1 HTTP/1.0\r\n',
                           HDR('Content-Length: 17'),
                           HDR('Content-Type: application/json'),
                           HDRE,
@@ -589,10 +593,10 @@ class ServerResource(unittest.TestCase):
         exp = ['HTTP/1.0 200 OK\r\n',
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
-               'Content-Length: 17\r\n'
+               'Content-Length: 30\r\n'
                'Access-Control-Allow-Methods: GET POST\r\n'
                'Content-Type: application/json\r\n\r\n',
-               '{"body": "body1"}']
+               '{"qs": "qs1", "body": "body1"}']
         self.assertEqual(wrt.history, exp)
 
     def testInvalidMethod(self):

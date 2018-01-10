@@ -46,6 +46,10 @@ Simple? Oh yeah!
 
 Like it? Check our [examples](https://github.com/belyalov/tinyweb/tree/master/examples) then :)
 
+### Limitation / Known issues
+* HTTP protocol support - due to memory constrains only **HTTP/1.0** is supported. Support of HTTP/1.1 may be added when `esp8266` platform will be completely deprecated.
+* [esp8266: socket accept() does not always accept](https://github.com/micropython/micropython/issues/2490) - sometimes whenever you're opening connection simultaneously some of them will never be accepted. Therefore it is strongly recommended to pack all your data (like `css`, `js`) into single html page.
+
 ### Reference
 #### class `webserver`
 Main tinyweb app class.

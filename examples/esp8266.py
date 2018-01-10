@@ -83,7 +83,7 @@ class GPIO():
 
     def put(self, data, pin):
         # Check input parameters
-        if data is None or 'value' not in data:
+        if 'value' not in data:
             return {'message': '"value" is requred'}, 400
         # Check pin
         pin = int(pin)

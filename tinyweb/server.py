@@ -135,15 +135,15 @@ class request:
         # chunks instead of accumulating payload.
         gc.collect()
         if b'Content-Length' not in self.headers:
-            return None
+            return {}
+        # Parse payload depending on content type
+        if b'Content-Type' not in self.headers:
+            # Unknown content type, return unparsed, raw data
+            return {}
         size = int(self.headers[b'Content-Length'])
         if size > self.params['max_body_size'] or size < 0:
             raise HTTPException(413)
         data = yield from self.reader.readexactly(size)
-        # Parse payload depending on content type
-        if b'Content-Type' not in self.headers:
-            # Unknown content type
-            return data
         # Use only string before ';', e.g:
         # application/x-www-form-urlencoded; charset=UTF-8
         ct = self.headers[b'Content-Type'].split(b';', 1)[0]
@@ -298,11 +298,15 @@ def restful_resource_handler(req, resp, param=None):
     """Handler for RESTful API endpoins"""
     # Gather data - query string, JSON in request body...
     data = yield from req.read_parse_form_data()
+    # Add parameters from URI query string as well
+    # This one is actually for simply development of RestAPI
+    if req.query_string != b'':
+        data.update(parse_query_string(req.query_string.decode()))
     # Call actual handler
     if param:
-        res = req.params['_callmap'][req.method](req.params['_class'], data, param)
+        res = req.params['_callmap'][req.method](data, param)
     else:
-        res = req.params['_callmap'][req.method](req.params['_class'], data)
+        res = req.params['_callmap'][req.method](data)
     # Handler result could be a tuple or just single dictionary, e.g.:
     # res = {'blah': 'blah'}
     # res = {'blah': 'blah'}, 201
@@ -455,13 +459,15 @@ class webserver:
         """
         methods = []
         callmap = {}
-        # Get all implemented HTTP methods in resource class
+        # Create instance of resource handler
+        obj = cls()
+        # Get all implemented HTTP methods and make callmap
         for m in ['GET', 'POST', 'PUT', 'DELETE']:
             fn = m.lower()
-            if hasattr(cls, fn):
+            if hasattr(obj, fn):
                 methods.append(m)
-                callmap[m.encode()] = getattr(cls, fn)
-        self.add_route(url, restful_resource_handler, methods=methods, _callmap=callmap, _class=cls)
+                callmap[m.encode()] = getattr(obj, fn)
+        self.add_route(url, restful_resource_handler, methods=methods, _callmap=callmap)
 
     def route(self, url, **kwargs):
         """Decorator for add_route()
