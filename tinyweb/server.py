@@ -424,7 +424,7 @@ class webserver:
                   'allowed_access_control_origins': '*',
                   }
         params.update(kwargs)
-        params['allowed_access_control_methods'] = ' '.join(params['methods'])
+        params['allowed_access_control_methods'] = ', '.join(params['methods'])
         # Convert methods to bytestring
         params['methods'] = [x.encode() for x in params['methods']]
         # If URL has a parameter
