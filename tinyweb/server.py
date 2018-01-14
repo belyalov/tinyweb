@@ -459,8 +459,11 @@ class webserver:
         """
         methods = []
         callmap = {}
-        # Create instance of resource handler
-        obj = cls()
+        # Create instance of resource handler, if passed as just class (not object)
+        try:
+            obj = cls()
+        except TypeError:
+            obj = cls
         # Get all implemented HTTP methods and make callmap
         for m in ['GET', 'POST', 'PUT', 'DELETE']:
             fn = m.lower()
