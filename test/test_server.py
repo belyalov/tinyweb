@@ -6,9 +6,9 @@ MIT license
 """
 
 import unittest
+import os
 from tinyweb import webserver
-from tinyweb.static import get_file_mime_type
-from tinyweb.server import urldecode_plus, parse_query_string
+from tinyweb.server import get_file_mime_type, urldecode_plus, parse_query_string
 from tinyweb.server import request, HTTPException
 
 
@@ -52,10 +52,12 @@ class mockWriter():
         self.closed = False
 
     def awrite(self, buf, off=0, sz=-1):
+        if sz == -1:
+            sz = len(buf) - off
         # Make this function to be as generator
         yield
         # Save biffer into history - so to be able to assert then
-        self.history.append(buf)
+        self.history.append(buf[:sz])
 
     def aclose(self):
         yield
@@ -257,6 +259,7 @@ server_for_decorators = webserver()
 
 
 @server_for_decorators.route('/uid/<user_id>')
+@server_for_decorators.route('/uid2/<user_id>')
 def route_for_decorator(req, resp, user_id):
     yield from resp.start_html()
     yield from resp.send('YO, {}'.format(user_id))
@@ -273,6 +276,7 @@ class ServerFull(unittest.TestCase):
 
     def testDecorator(self):
         """Test @.route() decorator"""
+        # First decorator
         rdr = mockReader(['GET /uid/man1 HTTP/1.1\r\n',
                           HDRE])
         wrt = mockWriter()
@@ -282,6 +286,19 @@ class ServerFull(unittest.TestCase):
         expected = ['HTTP/1.0 200 OK\r\n',
                     'Content-Type: text/html\r\n\r\n',
                     'YO, man1']
+        self.assertEqual(wrt.history, expected)
+        self.assertTrue(wrt.closed)
+
+        # Second decorator
+        rdr = mockReader(['GET /uid2/man2 HTTP/1.1\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        # "Send" request
+        run_generator(server_for_decorators._handler(rdr, wrt))
+        # Ensure that proper response "sent"
+        expected = ['HTTP/1.0 200 OK\r\n',
+                    'Content-Type: text/html\r\n\r\n',
+                    'YO, man2']
         self.assertEqual(wrt.history, expected)
         self.assertTrue(wrt.closed)
 
@@ -314,7 +331,7 @@ class ServerFull(unittest.TestCase):
         self.assertTrue(wrt.closed)
 
     def testRequestBodyUnknownType(self):
-        """Check Request Body correctness - usually comes with POST request"""
+        """Unknow HTTP body test - empty dict expected"""
         srv = webserver()
         srv.add_route('/', self.dummy_post_handler, methods=['POST'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
@@ -325,7 +342,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         # Check extracted POST body
-        self.assertEqual(self.data, b'12345')
+        self.assertEqual(self.data, {})
 
     def testRequestBodyJson(self):
         """JSON encoded POST body"""
@@ -346,7 +363,7 @@ class ServerFull(unittest.TestCase):
         srv = webserver()
         srv.add_route('/', self.dummy_post_handler, methods=['POST'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
-                          HDR('Content-Type: application/x-www-form-urlencoded'),
+                          HDR('Content-Type: application/x-www-form-urlencoded; charset=UTF-8'),
                           HDR('Content-Length: 10'),
                           HDRE,
                           'a=b&c=%20d'])
@@ -501,7 +518,7 @@ class ResourceGetPost():
     """Simple REST API resource class with just two methods"""
 
     def get(self, data):
-        return {"data1": "junk"}
+        return {'data1': 'junk'}
 
     def post(self, data):
         return data
@@ -510,8 +527,11 @@ class ResourceGetPost():
 class ResourceGetParam():
     """Parameterized REST API resource"""
 
+    def __init__(self):
+        self.user_id = 'user_id'
+
     def get(self, data, user_id):
-        return {"user_id": user_id}
+        return {self.user_id: user_id}
 
 
 class ServerResource(unittest.TestCase):
@@ -562,7 +582,8 @@ class ServerResource(unittest.TestCase):
         self.assertEqual(wrt.history, exp)
 
     def testPost(self):
-        rdr = mockReader(['POST / HTTP/1.0\r\n',
+        # Ensure that parameters from query string / body will be combined as well
+        rdr = mockReader(['POST /?qs=qs1 HTTP/1.0\r\n',
                           HDR('Content-Length: 17'),
                           HDR('Content-Type: application/json'),
                           HDRE,
@@ -572,10 +593,10 @@ class ServerResource(unittest.TestCase):
         exp = ['HTTP/1.0 200 OK\r\n',
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
-               'Content-Length: 17\r\n'
+               'Content-Length: 30\r\n'
                'Access-Control-Allow-Methods: GET POST\r\n'
                'Content-Type: application/json\r\n\r\n',
-               '{"body": "body1"}']
+               '{"qs": "qs1", "body": "body1"}']
         self.assertEqual(wrt.history, exp)
 
     def testInvalidMethod(self):
@@ -586,6 +607,75 @@ class ServerResource(unittest.TestCase):
         exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
                '\r\n']
         self.assertEqual(wrt.history, exp)
+
+
+class StaticContent(unittest.TestCase):
+
+    def setUp(self):
+        self.srv = webserver()
+        self.tempfn = '__tmp.html'
+        self.ctype = None
+        self.max_age = 2592000
+        with open(self.tempfn, 'wb') as f:
+            f.write('someContent blah blah')
+
+    def tearDown(self):
+        try:
+            os.remove(self.tempfn)
+        except OSError:
+            pass
+
+    def send_file_handler(self, req, resp):
+        yield from resp.send_file(self.tempfn, content_type=self.ctype,
+                                  max_age=self.max_age)
+
+    def testSendFileAutoMime(self):
+        """Verify send_file feature with auto mime type"""
+        self.srv.add_route('/', self.send_file_handler)
+        rdr = mockReader(['GET / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(self.srv._handler(rdr, wrt))
+
+        exp = ['HTTP/1.0 200 OK\r\n',
+               'Content-Type: text/html\r\n'
+               'Content-Length: 21\r\n'
+               'Cache-Control: max-age=2592000, public\r\n\r\n',
+               bytearray(b'someContent blah blah')]
+        self.assertEqual(wrt.history, exp)
+        self.assertTrue(wrt.closed)
+
+    def testSendFileManual(self):
+        """Verify send_file feature with auto mime type"""
+        self.ctype = 'text/plain'
+        self.max_age = 100
+        self.srv.add_route('/', self.send_file_handler)
+        rdr = mockReader(['GET / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(self.srv._handler(rdr, wrt))
+
+        exp = ['HTTP/1.0 200 OK\r\n',
+               'Content-Type: text/plain\r\n'
+               'Content-Length: 21\r\n'
+               'Cache-Control: max-age=100, public\r\n\r\n',
+               bytearray(b'someContent blah blah')]
+        self.assertEqual(wrt.history, exp)
+        self.assertTrue(wrt.closed)
+
+    def testSendFileNotFound(self):
+        """Verify 404 error for non existing files"""
+        self.srv.add_route('/', self.send_file_handler)
+        rdr = mockReader(['GET / HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+
+        # Intentionally delete file before request
+        os.remove(self.tempfn)
+        run_generator(self.srv._handler(rdr, wrt))
+
+        self.assertEqual(wrt.history, ['HTTP/1.0 404 Not Found\r\n', '\r\n'])
+        self.assertTrue(wrt.closed)
 
 
 if __name__ == '__main__':

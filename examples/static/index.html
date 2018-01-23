@@ -1,0 +1,226 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>TinyWeb Static content example</title>
+
+    <!-- Dummy favicon. We don't want browser to send unwanted requests -->
+    <link rel="icon" type="image/gif" href="http://docs.micropython.org/en/v1.9.3/esp8266/_static/favicon.ico" />
+
+    <!-- Bootstrap core CSS -->
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    <!-- TinyWeb styles -->
+    <style type="text/css">
+      body {
+        padding-top: 5rem;
+      }
+      main {
+        display: none;
+      }
+    </style>
+
+  </head>
+
+  <body>
+
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
+      <a class="navbar-brand" href="#">TinyWeb</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+        <ul class="navbar-nav mr-auto">
+          <li class="nav-item active">
+            <a class="nav-link" href="#">Status</a>
+          </li>
+           <li class="nav-item">
+            <a class="nav-link" href="#gpio">GPIO</a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+
+    <main role="main" class="container" id="status">
+      <div class="row">
+
+        <div class="col-sm-3 offset-md-1">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Memory</h5>
+              <table class="table">
+                <tbody>
+                  <tr>
+                    <td>Free</td>
+                    <td id=mem_free style="font-weight: bold">...</td>
+                  </tr>
+                  <tr>
+                    <td>Allocated</td>
+                    <td id=mem_alloc>...</td>
+                  </tr>
+                  <tr>
+                    <td>Total</td>
+                    <td id=mem_total>...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-sm-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Network</h5>
+              <table class="table">
+                <tbody>
+                  <tr>
+                    <td>IP</td>
+                    <td id=ip>...</td>
+                  </tr>
+                  <tr>
+                    <td>NetMask</td>
+                    <td id=netmask>...</td>
+                  </tr>
+                  <tr>
+                    <td>Gateway</td>
+                    <td id=gateway>...</td>
+                  </tr>
+                  <tr>
+                    <td>DNS</td>
+                    <td id=dns>...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-sm-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Cat :)</h5>
+                <p><img src="/images/gcat.jpg"></p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </main> <!-- of status -->
+
+
+    <main role="main" class="container" id="gpio">
+      <div class="row">
+
+        <div class="col-sm-6 offset-md-3">
+          <table class="table table-striped table-bordered">
+            <thead>
+              <tr>
+                <th scope="col">GPIO #</th>
+                <th scope="col">MCU #</th>
+                <th scope="col">State</th>
+                <th scope="col"></th>
+              </tr>
+            </thead>
+            <tbody id=gpio_rows>
+              <tr>
+                <td>...</td>
+                <td>...</td>
+                <td>...</td>
+                <td>...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+    </main><!-- of gpio -->
+
+    <!-- JQuery -->
+    <script src="/js/jquery-3.2.1.min.js"></script>
+
+    <!--  ESP8266 scripts -->
+    <script>
+      function update_status(data)
+      {
+          $.each(data["memory"], function(key, val) {
+            var m = parseFloat(val / 1000).toFixed(2);
+            $("#" + key).text(m + 'k');
+          });
+          $.each(data["network"], function(key, val) {
+            $("#" + key).text(val);
+          });
+      }
+
+      function update_gpio(data)
+      {
+        var res = "";
+        $.each(data["pins"], function(key, val) {
+          var state = "Off";
+          var btn = "<button type='button' class='btn btn-success' act=1 pin=" + val["gpio"] + ">Turn On</button>";
+          if (val["value"] != "0") {
+            state = "On";
+            btn = "<button type='button' class='btn btn-secondary' act=0 pin=" + val["gpio"] + ">Turn Off</button>";
+          }
+          res += "<tr><td>" + val["gpio"] + "</td>";
+          res += "<td>" + val["nodemcu"] + "</td>";
+          res += "<td>" + state + "</td>";
+          res += "<td class='text-center'>" + btn + "</tr>";
+        });
+        // update table rows
+        $("#gpio_rows").html(res);
+        // handle button click event
+        $("button[pin]").click(function(e) {
+          e.preventDefault();
+          // Send RESTApi request to change port status
+          $.ajax({
+              url: "/api/gpio/" + $(this).attr("pin"),
+              type : "PUT",
+              // contentType: 'application/json',
+              data : {"value": $(this).attr("act")},
+              success : function(result) {
+                  // on success - reload table
+                  console.log(result);
+                  on_hash_change();
+              },
+              error: function(xhr, resp, text) {
+                  console.log(method, uri, resp, text);
+              }
+          })
+        });
+      }
+
+      function on_hash_change()
+      {
+        var hash = window.location.hash;
+        if (hash == '') {
+          hash = '#status';
+        }
+        console.log("Hash change", hash);
+        $.getJSON("api/" + hash.substring(1), function(data) {
+          if (hash == "#status") {
+            update_status(data)
+          }
+          if (hash == "#gpio") {
+            update_gpio(data);
+          }
+        });
+        $("main").hide()
+        $(hash).show();
+      }
+
+      window.onhashchange = on_hash_change;
+      $(document).ready(on_hash_change);
+
+    </script> <!-- End of ESP scripts -->
+
+  </body>
+</html>
