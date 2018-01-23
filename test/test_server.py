@@ -77,9 +77,10 @@ class Utils(unittest.TestCase):
     def testMimeTypes(self):
         self.assertEqual(get_file_mime_type('a.html'), 'text/html')
         self.assertEqual(get_file_mime_type('a.gif'), 'image/gif')
+        self.assertEqual(get_file_mime_type('a.gif.jpg'), 'image/jpeg')
 
     def testMimeTypesUnknown(self):
-        runs = ['', '.', 'bbb', 'bbb.bbbb', '/', ' ']
+        runs = ['', '.', 'bbb', 'bb.', 'bbb.bbbb', '/', ' ']
         for r in runs:
             self.assertEqual('text/plain', get_file_mime_type(r))
 

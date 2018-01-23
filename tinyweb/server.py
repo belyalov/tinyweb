@@ -48,17 +48,17 @@ def get_file_mime_type(fname):
 
     Returns string
     """
-    mime_types = {'.html': 'text/html',
-                  '.css': 'text/css',
-                  '.js': 'application/javascript',
-                  '.png': 'image/png',
-                  '.jpg': 'image/jpeg',
-                  '.jpeg': 'image/jpeg',
-                  '.gif': 'image/gif'}
+    mime_types = {'html': 'text/html',
+                  'css' : 'text/css',
+                  'js'  : 'application/javascript',
+                  'png' : 'image/png',
+                  'jpg' : 'image/jpeg',
+                  'jpeg': 'image/jpeg',
+                  'gif' : 'image/gif'}
     idx = fname.rfind('.')
     if idx == -1:
         return 'text/plain'
-    ext = fname[idx:]
+    ext = fname[idx+1:]
     if ext not in mime_types:
         return 'text/plain'
     else:
