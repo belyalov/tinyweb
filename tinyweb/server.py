@@ -370,9 +370,14 @@ class webserver:
             req.params = params
             resp.params = params
 
-            # OPTIONS method is handled automatically (if not disabled)
+            # OPTIONS method is handled automatically
             if req.method == b'OPTIONS':
                 resp.add_access_control_headers()
+                # Since we support only HTTP 1.0 - it is important
+                # to tell browser that there is no payload expected
+                # otherwise some webkit based browsers (Chrome)
+                # treat this behavior as an error
+                resp.add_header('Content-Length', '0')
                 yield from resp._send_response_line()
                 yield from resp._send_headers()
                 return
