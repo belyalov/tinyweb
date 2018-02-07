@@ -494,8 +494,9 @@ class ServerFull(unittest.TestCase):
 
         exp = ['HTTP/1.0 200 OK\r\n',
                'Access-Control-Allow-Headers: *\r\n'
+               'Content-Length: 0\r\n'
                'Access-Control-Allow-Origin: *\r\n'
-               'Access-Control-Allow-Methods: POST PUT DELETE\r\n\r\n']
+               'Access-Control-Allow-Methods: POST, PUT, DELETE\r\n\r\n']
         self.assertEqual(wrt.history, exp)
         self.assertTrue(wrt.closed)
 
@@ -549,8 +550,9 @@ class ServerResource(unittest.TestCase):
         run_generator(self.srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 200 OK\r\n',
                'Access-Control-Allow-Headers: *\r\n'
+               'Content-Length: 0\r\n'
                'Access-Control-Allow-Origin: *\r\n'
-               'Access-Control-Allow-Methods: GET POST\r\n\r\n']
+               'Access-Control-Allow-Methods: GET, POST\r\n\r\n']
         self.assertEqual(wrt.history, exp)
 
     def testGet(self):
@@ -562,7 +564,7 @@ class ServerResource(unittest.TestCase):
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 17\r\n'
-               'Access-Control-Allow-Methods: GET POST\r\n'
+               'Access-Control-Allow-Methods: GET, POST\r\n'
                'Content-Type: application/json\r\n\r\n',
                '{"data1": "junk"}']
         self.assertEqual(wrt.history, exp)
@@ -594,7 +596,7 @@ class ServerResource(unittest.TestCase):
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 30\r\n'
-               'Access-Control-Allow-Methods: GET POST\r\n'
+               'Access-Control-Allow-Methods: GET, POST\r\n'
                'Content-Type: application/json\r\n\r\n',
                '{"qs": "qs1", "body": "body1"}']
         self.assertEqual(wrt.history, exp)
