@@ -535,12 +535,25 @@ class ResourceGetParam():
         return {self.user_id: user_id}
 
 
+class ResourceNegative():
+    """To cover negative test cases"""
+
+    def delete(self, data):
+        # Broken pipe emulation
+        raise OSError(32, '', '')
+
+    def put(self, data):
+        # Simple unhandled expection
+        raise Exception('something')
+
+
 class ServerResource(unittest.TestCase):
 
     def setUp(self):
         self.srv = webserver()
         self.srv.add_resource(ResourceGetPost, '/')
         self.srv.add_resource(ResourceGetParam, '/param/<user_id>')
+        self.srv.add_resource(ResourceNegative, '/negative')
 
     def testOptions(self):
         # Ensure that only GET/POST methods are allowed:
@@ -609,6 +622,22 @@ class ServerResource(unittest.TestCase):
         exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
                '\r\n']
         self.assertEqual(wrt.history, exp)
+
+    def testException(self):
+        rdr = mockReader(['PUT /negative HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(self.srv._handler(rdr, wrt))
+        exp = ['HTTP/1.0 500 Internal Server Error\r\n',
+               '\r\n']
+        self.assertEqual(wrt.history, exp)
+
+    def testBrokenPipe(self):
+        rdr = mockReader(['DELETE /negative HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(self.srv._handler(rdr, wrt))
+        self.assertEqual(wrt.history, [])
 
 
 class StaticContent(unittest.TestCase):

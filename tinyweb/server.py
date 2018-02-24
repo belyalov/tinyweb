@@ -397,11 +397,14 @@ class webserver:
             else:
                 yield from handler(req, resp)
             # Done
+        except OSError as e:
+            # Do not send response in case of "Broken Pipe", its too late :)
+            if e.args[0] != 32:
+                yield from resp.error(500)
         except HTTPException as e:
             yield from resp.error(e.code)
         except Exception as e:
             yield from resp.error(500)
-            raise
         finally:
             yield from writer.aclose()
 
