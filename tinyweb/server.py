@@ -68,8 +68,9 @@ def get_file_mime_type(fname):
 class HTTPException(Exception):
     """HTTP protocol expections"""
 
-    def __init__(self, code=400):
+    def __init__(self, code=400, message=None):
         self.code = code
+        self.message = message
 
 
 class request:
@@ -200,7 +201,7 @@ class response:
         hdrs.append('\r\n')
         yield from self.send('\r\n'.join(hdrs))
 
-    def error(self, code):
+    def error(self, code, msg=None):
         """Generate HTTP error response
         This function is generator.
 
@@ -212,8 +213,12 @@ class response:
             yield from resp.error(403)
         """
         self.code = code
+        if msg:
+            self.add_header('Content-Length', len(msg))
         yield from self._send_response_line()
-        yield from self.send('\r\n')
+        yield from self._send_headers()
+        if msg:
+            yield from self.send(msg)
 
     def redirect(self, location):
         """Generate HTTP redirect response to 'location'.
@@ -307,7 +312,7 @@ class response:
                         break
                     yield from self.send(buf, sz=size)
         except OSError as e:
-            raise HTTPException(404)
+            raise HTTPException(404, 'File Not Found')
 
 
 def restful_resource_handler(req, resp, param=None):
@@ -382,7 +387,7 @@ class webserver:
             handler, params = self._find_url_handler(req)
             if not handler:
                 # No URL handler found - HTTP 404
-                raise HTTPException(404)
+                raise HTTPException(404, 'Page Not Found')
             req.params = params
             resp.params = params
 
@@ -418,7 +423,7 @@ class webserver:
             if e.args[0] != 32:
                 yield from resp.error(500)
         except HTTPException as e:
-            yield from resp.error(e.code)
+            yield from resp.error(e.code, e.message)
         except Exception as e:
             yield from resp.error(500)
         finally:

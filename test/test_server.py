@@ -516,6 +516,21 @@ class ServerFull(unittest.TestCase):
         self.assertEqual(wrt.history, exp)
         self.assertTrue(wrt.closed)
 
+    def testPageNotFound(self):
+        """Verify that malformed request generates proper response"""
+        rdr = mockReader(['GET /not_existing HTTP/1.1\r\n',
+                          HDR('Host: blah.com'),
+                          HDRE])
+        wrt = mockWriter()
+        srv = webserver()
+        run_generator(srv._handler(rdr, wrt))
+        exp = ['HTTP/1.0 404 Not Found\r\n',
+               'Content-Length: 14\r\n\r\n',
+               'Page Not Found']
+        self.assertEqual(wrt.history, exp)
+        # Connection must be closed
+        self.assertTrue(wrt.closed)
+
     def testMalformedRequest(self):
         """Verify that malformed request generates proper response"""
         rdr = mockReader(['GET /\r\n',
@@ -721,7 +736,10 @@ class StaticContent(unittest.TestCase):
         os.remove(self.tempfn)
         run_generator(self.srv._handler(rdr, wrt))
 
-        self.assertEqual(wrt.history, ['HTTP/1.0 404 Not Found\r\n', '\r\n'])
+        exp = ['HTTP/1.0 404 Not Found\r\n',
+               'Content-Length: 14\r\n\r\n',
+               'File Not Found']
+        self.assertEqual(wrt.history, exp)
         self.assertTrue(wrt.closed)
 
 
