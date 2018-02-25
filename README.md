@@ -119,10 +119,10 @@ Use this class to generate some HTTP response. Please be noticed that `response`
 
 * `add_access_control_headers(self)` - Add HTTP headers required for RESTAPI (JSON query)
 
-* `redirect(self, location)` - Generate HTTP redirection (HTTP 302 Found) to `location`.
+* `redirect(self, location)` - Generate HTTP redirection (HTTP 302 Found) to `location`. This *function is generator*.
 * `start_html(self)`- Start response with HTML content type. This *function is generator*. This function is basically sends response line and headers. Refer to [hello world example](https://github.com/belyalov/tinyweb/blob/master/examples/hello_world.py).
 
-* `send(self, payload)` - Sends your string/binary string `payload` to client. Be sure to start your response with `start_html()` or manually. This *function is generator*.
+* `send(self, payload)` - Sends your string/bytes `payload` to client. Be sure to start your response with `start_html()` or manually. This *function is generator*.
 
 * `send_file(self, filename)`: Send local file as HTTP response. File type will be detected automatically unless you explicitly change it. If file doesn't exists - HTTP Error `404` will be generated.
 Additional keyword arguments
