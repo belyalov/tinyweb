@@ -117,15 +117,16 @@ Use this class to generate some HTTP response. Please be noticed that `response`
     * `key` - Header name
     * `value` - Header value
 
-* `add_access_control_headers()` - Add HTTP headers required for RESTAPI (JSON query)
+* `add_access_control_headers(self)` - Add HTTP headers required for RESTAPI (JSON query)
 
-* `start_html()`- Start response with HTML content type. This *function is generator*. This function is basically sends response line and headers. Refer to [hello world example](https://github.com/belyalov/tinyweb/blob/master/examples/hello_world.py).
+* `redirect(self, location)` - Generate HTTP redirection (HTTP 302 Found) to `location`.
+* `start_html(self)`- Start response with HTML content type. This *function is generator*. This function is basically sends response line and headers. Refer to [hello world example](https://github.com/belyalov/tinyweb/blob/master/examples/hello_world.py).
 
-* `send(payload)` - Sends your string/binary string `payload` to client. Be sure to start your response with `start_html()` or manually. This *function is generator*.
+* `send(self, payload)` - Sends your string/binary string `payload` to client. Be sure to start your response with `start_html()` or manually. This *function is generator*.
 
 * `send_file(self, filename)`: Send local file as HTTP response. File type will be detected automatically unless you explicitly change it. If file doesn't exists - HTTP Error `404` will be generated.
 Additional keyword arguments
     * `content_type` - MIME filetype. By default - `None` which means autodetect.
     * `max_age` - Cache control. How long browser can keep this file on disk. Value is in `seconds`. By default - 30 days. To disable caching, set it to `0`.
 
-* `error(code)` - Generate HTTP error response with error `code`. This *function is generator*.
+* `error(self, code)` - Generate HTTP error response with error `code`. This *function is generator*.

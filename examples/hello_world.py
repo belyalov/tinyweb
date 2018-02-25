@@ -19,6 +19,13 @@ def index(request, response):
     yield from response.send('<html><body><h1>Hello, world!</h1></html>\n')
 
 
+# HTTP redirection
+@app.route('/redirect')
+def redirect(request, response):
+    # Start HTTP response with content-type text/html
+    yield from response.redirect('/')
+
+
 # Another one, more complicated page
 @app.route('/table')
 def table(request, response):
@@ -43,3 +50,6 @@ if __name__ == '__main__':
     # - Browser:
     #   http://localhost:8081
     #   http://localhost:8081/table
+    #
+    # - To test HTTP redirection:
+    #   curl http://localhost:8081/redirect -v
