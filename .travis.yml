@@ -1,8 +1,14 @@
 sudo: required
 
+language:
+  - python
+
+services:
+  - docker
+
 install:
-  - sudo apt-get -qq update
-  - sudo apt-get install -y build-essential libreadline-dev libffi-dev pkg-config git python python-pip
+  - sudo apt-get update
+  - sudo apt-get install --no-install-recommends --no-install-suggests -y build-essential libreadline-dev libffi-dev pkg-config git python python-pip
   - sudo pip install pycodestyle
   - git clone --recurse-submodules https://github.com/micropython/micropython.git
   - cd ./micropython/ports/unix
@@ -11,8 +17,21 @@ install:
   - micropython -m upip install micropython-uasyncio micropython-unittest micropython-os
   - cd ../../../
   - ln -sf `pwd`/tinyweb/ ~/.micropython/lib/tinyweb
-  - ls -la
 
 script:
   - pycodestyle --ignore=E501 tinyweb/*.py test/*.py
   - ./test/test_server.py
+  - mkdir -p micropython/ports/esp8266/modules/tinyweb
+  - cp -r tinyweb/ micropython/ports/esp8266/modules/tinyweb
+  - ls -lR micropython/ports/esp8266/modules
+  - docker run -v`pwd`/micropython:/micropython arsenicus/esp-open-sdk /bin/bash -c ". ~/.bashrc && cd /micropython/ports/esp8266 && make"
+  - cp micropython/ports/esp8266/build/firmware-combined.bin ./firmware_esp8266.bin
+
+deploy:
+  provider: releases
+  api_key:
+    secure: LN9yw25ZRZt+xnD7+0Dy+kJ0EPk5AnrBfvtCsPrCRsRvb8NK+vrNtxxnslim49XpFTDOG712cDAfLnoz+SRZM1ZZn4IPmAsEFmU7FoFNTXWFt44xW6L17ER4bsGFCzLoWDohk7+Ps8V4ZOnbNXa0jm2i8FA8WuLzTBjn/btJSGxnfJei2fTYYenz96/LyaO7c1p7iaq12hcvcd15NQKSOF+JTgJV1NiPSzI8bg7HgqGR/o00Rdm5Gr91iuI97hCCVXhqfFx/VXkvOo5RwR9Ka0nNSzNg4Ijmxwv04uEHJ2pRnCOGqC951ksKu8D6+D2nHMYpNSUKwwkBy+1d3oRwN376oE46sXjX29xzxDf7Iun4F8WPh8bqhS0qfZNM3luHvjFQeXmxPCL633NkaR4P8dhWoZGxP7DECzG7bVEDvraZK1pXyFN/Ihn05AYWwZQxbbdD0t6Y6d5skguN2rGkGK5tZlzMIqrxxaZji5XDupWfJtOYQmcHRWcEsEb2Rhe5692n2AsIeSNHvBfU+rMpZyGSdiawphVo468ANzxoYVyCBcc9ymMORBOmb3Fb8bbMcCQNFs2hjwAZkxV1PyjN9GRyh7CoHoS1xLA2eryO/2UWkih1RSQbV6Ovk/XEW9ahQEBcRCXylAT2fanxdPfpqYadRk/8yToKNBbuDoGjILA=
+  file: firmware_esp8266.bin
+  skip_cleanup: true
+  on:
+    tags: true
