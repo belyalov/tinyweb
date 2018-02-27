@@ -8,9 +8,10 @@ services:
 
 install:
   - sudo apt-get update
-  - sudo apt-get install --no-install-recommends --no-install-suggests -y build-essential libreadline-dev libffi-dev pkg-config git python python-pip
+  - sudo apt-get install --no-install-recommends --no-install-suggests -y build-essential libreadline-dev libffi-dev pkg-config
   - sudo pip install pycodestyle
   - git clone --recurse-submodules https://github.com/micropython/micropython.git
+  - git clone https://github.com/micropython/micropython-lib.git
   - cd ./micropython/ports/unix
   - make axtls
   - sudo make install
@@ -19,11 +20,14 @@ install:
   - ln -sf `pwd`/tinyweb/ ~/.micropython/lib/tinyweb
 
 script:
+  # Run style checks
   - pycodestyle --ignore=E501 tinyweb/*.py test/*.py
+  # Run unittests
   - ./test/test_server.py
-  - mkdir -p micropython/ports/esp8266/modules/tinyweb
-  - cp -r tinyweb/ micropython/ports/esp8266/modules/tinyweb
-  - ls -lR micropython/ports/esp8266/modules
+  # Compile firmware for esp8266
+  - cp -R tinyweb/ micropython/ports/esp8266/modules/tinyweb
+  - cp -R micropython-lib/uasyncio/uasyncio/ micropython/ports/esp8266/modules/uasyncio
+  - cp micropython-lib/uasyncio.core/uasyncio/core.py micropython/ports/esp8266/modules/uasyncio
   - docker run -v`pwd`/micropython:/micropython arsenicus/esp-open-sdk /bin/bash -c ". ~/.bashrc && cd /micropython/ports/esp8266 && make"
   - cp micropython/ports/esp8266/build/firmware-combined.bin ./firmware_esp8266.bin
 
