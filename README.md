@@ -1,5 +1,5 @@
 ## TinyWeb [![Build Status](https://travis-ci.org/belyalov/tinyweb.svg?branch=master)](https://travis-ci.org/belyalov/tinyweb)
-Simple and lightweight (thus - *tiny*) HTTP server for tiny devices like ESP8266 / ESP32 *(not tested yet)* running [micropython](https://github.com/micropython/micropython).
+Simple and lightweight (thus - *tiny*) HTTP server for tiny devices like **ESP8266** / **ESP32** running [micropython](https://github.com/micropython/micropython).
 Having an simple HTTP server allows developers to create nice and modern UI for their IOT devices.
 By itself - *tinyweb* is just simple TCP server which runs in top of **uasyncio** - async like library for micropython, therefore tinyweb is single threaded server.
 
