@@ -6,7 +6,7 @@ By itself - *tinyweb* is just simple TCP server which runs in top of **uasyncio*
 ### Features
 * Fully asynchronous using [uasyncio](https://github.com/micropython/micropython-lib/tree/master/uasyncio) library for MicroPython.
 * [Flask](http://flask.pocoo.org/) / [Flask-RESTful](https://flask-restful.readthedocs.io/en/latest/) like API.
-* *Tiny* memory usage. So you can run it on devices like **ESP8266** which has about 64K of RAM. BTW, there is a huge room for optimizations - so your contributions are warmly welcomed.
+* *Tiny* memory usage. So you can run it on devices like **ESP8266 / ESP32** with 64K/96K of RAM onboard. BTW, there is a huge room for optimizations - so your contributions are warmly welcomed.
 * Support for static content serving from filesystem.
 * Great unittest coverage. So you can be confident about quality :)
 
@@ -15,36 +15,55 @@ By itself - *tinyweb* is just simple TCP server which runs in top of **uasyncio*
 * [uasyncio-core](https://github.com/micropython/micropython-lib/tree/master/uasyncio.core)
 
 ### Quickstart
+Tinyweb comes as a compiled firmware for ESP8266 / ESP32 as well. You don't have to use it - however, it could be easiest way to try it :)
+Instructions below are tested with *NodeMCU* devices. For your device instructions could be slightly different, so keep in mind.
+**CAUTION**: If you proceed with installation all data on your device will **lost**!
+
+#### Installation - ESP8266
+* Download latest `firmware_esp8266.bin` from [releases](https://github.com/belyalov/tinyweb/releases).
+* Install `esp-tool` if you haven't done already: `pip install esptool`
+* Erase flash: `esptool.py --port <UART PORT> --baud 115200 erase_flash`
+* Flash firmware: `esptool.py --port <UART PORT> --baud 115200 write_flash -fm dio 0 firmware_esp8266.bin`
+
+#### Installation - ESP32
+* Download latest `firmware_esp32.bin` from [releases](https://github.com/belyalov/tinyweb/releases).
+* Install `esp-tool` if you haven't done already: `pip install esptool`
+* Erase flash: `esptool.py --port <UART PORT> --baud 115200 erase_flash`
+* Flash firmware: `esptool.py --port <UART PORT> --baud 115200 write_flash -fm dio 0x1000 firmware_esp32.bin`
+
+#### Hello world
 Let's develop pretty simple static web application:
 ```python
+import network
 import tinyweb
 
+# Connect to your WiFi AP
+sta_if = network.WLAN(network.STA_IF)
+sta_if.active(True)
+sta_if.connect('<ssid>', '<password>')
 
 # Create web server application
 app = tinyweb.webserver()
 
-
-# Index page (just to be sure - let's handle most popular index links)
+# Hello world index page (just to be sure - let's handle most popular index links)
 @app.route('/')
 @app.route('/index.html')
 def index(req, resp):
-    # Just send file - you don't need to worry about content type
-    yield from resp.send_file('static/index.simple.html')
+    yield from resp.start_html()
+    yield from resp.send('<html><body><h1>Hello, world!</h1></html>\n')
 
-
-# Images
+# Images (you need to put some images into 'images/' folder)
 @app.route('/images/<fn>')
 def images(req, resp, fn):
     # Send picture. Filename - in just a parameter
-    yield from resp.send_file('static/images/{}'.format(fn))
-
+    yield from resp.send_file('images/{}'.format(fn))
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='0.0.0.0', port=80)
 ```
 Simple? Oh yeah!
 
-Like it? Check our [examples](https://github.com/belyalov/tinyweb/tree/master/examples) then :)
+Like it? Check more [examples](https://github.com/belyalov/tinyweb/tree/master/examples) then :)
 
 ### Limitation / Known issues
 * HTTP protocol support - due to memory constrains only **HTTP/1.0** is supported. Support of HTTP/1.1 may be added when `esp8266` platform will be completely deprecated.
