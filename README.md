@@ -86,7 +86,7 @@ Main tinyweb app class.
     def index(req, resp):
         yield from resp.send_file('static/index.simple.html')
     ```
-* `add_resource(self, cls, url)` - RestAPI: Map resource class `cls` to `url`.  Class `cls` is arbitrary class with with implementation of HTTP methods:
+* `add_resource(self, cls, url, **kwargs)` - RestAPI: Map resource class `cls` to `url`.  Class `cls` is arbitrary class with with implementation of HTTP methods:
     ```python
     class CustomersList():
         def get(self, data):
@@ -98,6 +98,7 @@ Main tinyweb app class.
             db[str(next_id)] = data
         return {'message': 'created'}, 201
     ```
+  `**kwargs` are optional and will be passed to handler directly.
     **Note**: only `GET`, `POST`, `PUT` and `DELETE` methods are supported. Check [restapi full example](https://github.com/belyalov/tinyweb/blob/master/examples/rest_api.py) as well.
 
 * `run(self, host="127.0.0.1", port=8081, loop_forever=True, backlog=10)` - run web server. Since *tinyweb* is fully async server by default it is blocking call assuming that you've added other tasks before.

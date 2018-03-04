@@ -324,10 +324,11 @@ def restful_resource_handler(req, resp, param=None):
     if req.query_string != b'':
         data.update(parse_query_string(req.query_string.decode()))
     # Call actual handler
+    _handler, _kwargs = req.params['_callmap'][req.method]
     if param:
-        res = req.params['_callmap'][req.method](data, param)
+        res = _handler(data, param, **_kwargs)
     else:
-        res = req.params['_callmap'][req.method](data)
+        res = _handler(data, **_kwargs)
     # Handler result could be a tuple or just single dictionary, e.g.:
     # res = {'blah': 'blah'}
     # res = {'blah': 'blah'}, 201
@@ -471,12 +472,13 @@ class webserver:
             raise ValueError('URL already exists')
         self.explicit_url_map[url.encode()] = (f, params)
 
-    def add_resource(self, cls, url):
+    def add_resource(self, cls, url, **kwargs):
         """Map resource (RestAPI) to URL
 
         Arguments:
             cls - Resource class to map to
             url - url to map to class
+            kwargs - User defined key args to pass to the handler.
 
         Example:
             class myres():
@@ -488,7 +490,7 @@ class webserver:
         """
         methods = []
         callmap = {}
-        # Create instance of resource handler, if passed as just class (not object)
+        # Create instance of resource handler, if passed as just class (not instance)
         try:
             obj = cls()
         except TypeError:
@@ -498,7 +500,7 @@ class webserver:
             fn = m.lower()
             if hasattr(obj, fn):
                 methods.append(m)
-                callmap[m.encode()] = getattr(obj, fn)
+                callmap[m.encode()] = (getattr(obj, fn), kwargs)
         self.add_route(url, restful_resource_handler, methods=methods, _callmap=callmap)
 
     def route(self, url, **kwargs):

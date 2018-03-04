@@ -566,6 +566,13 @@ class ResourceGetParam():
         return {self.user_id: user_id}
 
 
+class ResourceGetArgs():
+    """REST API resource with additional arguments"""
+
+    def get(self, data, arg1, arg2):
+        return {'arg1': arg1, 'arg2': arg2}
+
+
 class ResourceNegative():
     """To cover negative test cases"""
 
@@ -584,6 +591,7 @@ class ServerResource(unittest.TestCase):
         self.srv = webserver()
         self.srv.add_resource(ResourceGetPost, '/')
         self.srv.add_resource(ResourceGetParam, '/param/<user_id>')
+        self.srv.add_resource(ResourceGetArgs, '/args', arg1=1, arg2=2)
         self.srv.add_resource(ResourceNegative, '/negative')
 
     def testOptions(self):
@@ -625,6 +633,20 @@ class ServerResource(unittest.TestCase):
                'Access-Control-Allow-Methods: GET\r\n'
                'Content-Type: application/json\r\n\r\n',
                '{"user_id": "123"}']
+        self.assertEqual(wrt.history, exp)
+
+    def testGetWithArgs(self):
+        rdr = mockReader(['GET /args HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_generator(self.srv._handler(rdr, wrt))
+        exp = ['HTTP/1.0 200 OK\r\n',
+               'Access-Control-Allow-Origin: *\r\n'
+               'Access-Control-Allow-Headers: *\r\n'
+               'Content-Length: 22\r\n'
+               'Access-Control-Allow-Methods: GET\r\n'
+               'Content-Type: application/json\r\n\r\n',
+               '{"arg1": 1, "arg2": 2}']
         self.assertEqual(wrt.history, exp)
 
     def testPost(self):
