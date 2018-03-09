@@ -7,6 +7,7 @@ import uasyncio as asyncio
 import ujson as json
 import gc
 import os
+import sys
 
 
 def urldecode_plus(s):
@@ -426,6 +427,9 @@ class webserver:
         except HTTPException as e:
             yield from resp.error(e.code, e.message)
         except Exception as e:
+            print('-' * 40)
+            print('Unhandled expection in "{}"'.format(req.path.decode()))
+            sys.print_exception(e)
             yield from resp.error(500)
         finally:
             yield from writer.aclose()
