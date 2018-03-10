@@ -147,6 +147,7 @@ Use this class to generate some HTTP response. Please be noticed that `response`
 * `send_file(self, filename)`: Send local file as HTTP response. File type will be detected automatically unless you explicitly change it. If file doesn't exists - HTTP Error `404` will be generated.
 Additional keyword arguments
     * `content_type` - MIME filetype. By default - `None` which means autodetect.
+    * `content_encoding` - Specifies used compression type, e.g. `gzip`. By default - `None` which means don't add this header.
     * `max_age` - Cache control. How long browser can keep this file on disk. Value is in `seconds`. By default - 30 days. To disable caching, set it to `0`.
 
 * `error(self, code)` - Generate HTTP error response with error `code`. This *function is generator*.

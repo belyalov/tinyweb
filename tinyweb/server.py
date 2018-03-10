@@ -269,7 +269,7 @@ class response:
         yield from self._send_response_line()
         yield from self._send_headers()
 
-    def send_file(self, filename, content_type=None, max_age=2592000):
+    def send_file(self, filename, content_type=None, content_encoding=None, max_age=2592000):
         """Send local file as HTTP response.
         This function is generator.
 
@@ -299,6 +299,9 @@ class response:
             if not content_type:
                 content_type = get_file_mime_type(filename)
             self.add_header('Content-Type', content_type)
+            # Add content-encoding, if any
+            if content_encoding:
+                self.add_header('Content-Encoding', content_encoding)
             # Since this is static content is totally make sense
             # to tell browser to cache it, however, you can always
             # override it by setting max_age to zero

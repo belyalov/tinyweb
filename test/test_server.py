@@ -699,6 +699,7 @@ class StaticContent(unittest.TestCase):
         self.srv = webserver()
         self.tempfn = '__tmp.html'
         self.ctype = None
+        self.etype = None
         self.max_age = 2592000
         with open(self.tempfn, 'wb') as f:
             f.write('someContent blah blah')
@@ -710,7 +711,9 @@ class StaticContent(unittest.TestCase):
             pass
 
     def send_file_handler(self, req, resp):
-        yield from resp.send_file(self.tempfn, content_type=self.ctype,
+        yield from resp.send_file(self.tempfn,
+                                  content_type=self.ctype,
+                                  content_encoding=self.etype,
                                   max_age=self.max_age)
 
     def testSendFileAutoMime(self):
@@ -730,8 +733,9 @@ class StaticContent(unittest.TestCase):
         self.assertTrue(wrt.closed)
 
     def testSendFileManual(self):
-        """Verify send_file feature with auto mime type"""
+        """Verify send_file works great with manually defined parameters"""
         self.ctype = 'text/plain'
+        self.etype = 'gzip'
         self.max_age = 100
         self.srv.add_route('/', self.send_file_handler)
         rdr = mockReader(['GET / HTTP/1.0\r\n',
@@ -740,9 +744,10 @@ class StaticContent(unittest.TestCase):
         run_generator(self.srv._handler(rdr, wrt))
 
         exp = ['HTTP/1.0 200 OK\r\n',
+               'Cache-Control: max-age=100, public\r\n'
                'Content-Type: text/plain\r\n'
                'Content-Length: 21\r\n'
-               'Cache-Control: max-age=100, public\r\n\r\n',
+               'Content-Encoding: gzip\r\n\r\n',
                bytearray(b'someContent blah blah')]
         self.assertEqual(wrt.history, exp)
         self.assertTrue(wrt.closed)

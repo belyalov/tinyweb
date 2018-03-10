@@ -32,16 +32,18 @@ def index(req, resp):
 # pre-gzip all large files (>1k) and then send gzipped version
 @app.route('/js/<fn>')
 def files_js(req, resp, fn):
-    resp.add_header('Content-Encoding', 'gzip')
-    yield from resp.send_file('static/js/{}.gz'.format(fn), 'application/javascript')
+    yield from resp.send_file('static/js/{}.gz'.format(fn),
+                              content_type='application/javascript',
+                              content_encoding='gzip')
 
 
 # The same for css files - e.g.
 # Raw version of bootstrap.min.css is about 146k, compare to gzipped version - 20k
 @app.route('/css/<fn>')
 def files_css(req, resp, fn):
-    resp.add_header('Content-Encoding', 'gzip')
-    yield from resp.send_file('static/css/{}.gz'.format(fn), 'text/css')
+    yield from resp.send_file('static/css/{}.gz'.format(fn),
+                              content_type='text/css',
+                              content_encoding='gzip')
 
 
 # Images
