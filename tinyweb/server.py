@@ -329,10 +329,13 @@ def restful_resource_handler(req, resp, param=None):
         data.update(parse_query_string(req.query_string.decode()))
     # Call actual handler
     _handler, _kwargs = req.params['_callmap'][req.method]
+    # Collect garbage before / after handler execution
+    gc.collect()
     if param:
         res = _handler(data, param, **_kwargs)
     else:
         res = _handler(data, **_kwargs)
+    gc.collect()
     # Handler result could be a tuple or just single dictionary, e.g.:
     # res = {'blah': 'blah'}
     # res = {'blah': 'blah'}, 201
