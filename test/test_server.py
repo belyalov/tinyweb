@@ -160,19 +160,19 @@ class ServerParts(unittest.TestCase):
     def testHeadersSimple(self):
         req = request(mockReader([HDR('Host: google.com'),
                                   HDRE]))
-        run_generator(req.read_headers())
+        run_generator(req.read_headers([b'Host']))
         self.assertEqual(req.headers, {b'Host': b'google.com'})
 
     def testHeadersSpaces(self):
         req = request(mockReader([HDR('Host:    \t    google.com   \t     '),
                                   HDRE]))
-        run_generator(req.read_headers())
+        run_generator(req.read_headers([b'Host']))
         self.assertEqual(req.headers, {b'Host': b'google.com'})
 
     def testHeadersEmptyValue(self):
         req = request(mockReader([HDR('Host:'),
                                   HDRE]))
-        run_generator(req.read_headers())
+        run_generator(req.read_headers([b'Host']))
         self.assertEqual(req.headers, {b'Host': b''})
 
     def testHeadersMultiple(self):
@@ -183,7 +183,7 @@ class ServerParts(unittest.TestCase):
         hdrs = {b'Host': b'google.com',
                 b'Junk': b'you    blah',
                 b'Content-type': b'file'}
-        run_generator(req.read_headers())
+        run_generator(req.read_headers([b'Host', b'Junk', b'Content-type']))
         self.assertEqual(req.headers, hdrs)
 
     def testUrlFinderExplicit(self):
@@ -363,7 +363,10 @@ class ServerFull(unittest.TestCase):
     def testRequestBodyJson(self):
         """JSON encoded POST body"""
         srv = webserver()
-        srv.add_route('/', self.dummy_post_handler, methods=['POST'])
+        srv.add_route('/',
+                      self.dummy_post_handler,
+                      methods=['POST'],
+                      save_headers=['Content-Type', 'Content-Length'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/json'),
                           HDR('Content-Length: 10'),
@@ -377,7 +380,10 @@ class ServerFull(unittest.TestCase):
     def testRequestBodyUrlencoded(self):
         """Regular HTML form"""
         srv = webserver()
-        srv.add_route('/', self.dummy_post_handler, methods=['POST'])
+        srv.add_route('/',
+                      self.dummy_post_handler,
+                      methods=['POST'],
+                      save_headers=['Content-Type', 'Content-Length'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/x-www-form-urlencoded; charset=UTF-8'),
                           HDR('Content-Length: 10'),
@@ -391,7 +397,10 @@ class ServerFull(unittest.TestCase):
     def testRequestBodyNegative(self):
         """Regular HTML form"""
         srv = webserver()
-        srv.add_route('/', self.dummy_post_handler, methods=['POST'])
+        srv.add_route('/',
+                      self.dummy_post_handler,
+                      methods=['POST'],
+                      save_headers=['Content-Type', 'Content-Length'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/json'),
                           HDR('Content-Length: 9'),
@@ -405,7 +414,11 @@ class ServerFull(unittest.TestCase):
     def testRequestLargeBody(self):
         """Max Body size check"""
         srv = webserver()
-        srv.add_route('/', self.dummy_post_handler, methods=['POST'], max_body_size=5)
+        srv.add_route('/',
+                      self.dummy_post_handler,
+                      methods=['POST'],
+                      save_headers=['Content-Type', 'Content-Length'],
+                      max_body_size=5)
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/json'),
                           HDR('Content-Length: 9'),
@@ -440,34 +453,19 @@ class ServerFull(unittest.TestCase):
     def testParseHeadersOnOff(self):
         """Verify parameter parse_headers works"""
         srv = webserver()
-        srv.add_route('/parse', self.dummy_handler, parse_headers=True)
-        srv.add_route('/noparse', self.dummy_handler, parse_headers=False)
-        rdr = mockReader(['GET /noparse HTTP/1.1\r\n',
-                          HDR('Host: blah.com'),
-                          HDR('Header1: lalalla'),
-                          HDR('Junk: junk.com'),
+        srv.add_route('/', self.dummy_handler, save_headers=['H1', 'H2'])
+        rdr = mockReader(['GET / HTTP/1.1\r\n',
+                          HDR('H1: blah.com'),
+                          HDR('H2: lalalla'),
+                          HDR('Junk: fsdfmsdjfgjsdfjunk.com'),
                           HDRE])
-        # "Send" request with parsing off
+        # "Send" request
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         self.assertTrue(self.dummy_called)
-        # Check for headers
-        self.assertEqual(self.dummy_req.headers, {})
-        self.assertTrue(wrt.closed)
-
-        # "Send" request with parsing on
-        rdr = mockReader(['GET /parse HTTP/1.1\r\n',
-                          HDR('Host: blah.com'),
-                          HDR('Header1: lalalla'),
-                          HDR('Junk: junk.com'),
-                          HDRE])
-        wrt = mockWriter()
-        run_generator(srv._handler(rdr, wrt))
-        self.assertTrue(self.dummy_called)
-        # Check for headers
-        hdrs = {b'Junk': b'junk.com',
-                b'Host': b'blah.com',
-                b'Header1': b'lalalla'}
+        # Check for headers - only 2 of 3 should be collected, others - ignore
+        hdrs = {b'H1': b'blah.com',
+                b'H2': b'lalalla'}
         self.assertEqual(self.dummy_req.headers, hdrs)
         self.assertTrue(wrt.closed)
 

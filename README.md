@@ -15,7 +15,7 @@ By itself - *tinyweb* is just simple TCP server which runs in top of **uasyncio*
 * [uasyncio-core](https://github.com/micropython/micropython-lib/tree/master/uasyncio.core)
 
 ### Quickstart
-Tinyweb comes as a compiled firmware for ESP8266 / ESP32 as well. You don't have to use it - however, it could be easiest way to try it :)
+Tinyweb comes as a compiled firmware for ESP8266 / ESP32 as well ("frozen modules"). You don't have to use it - however, it could be easiest way to try it :)
 Instructions below are tested with *NodeMCU* devices. For your device instructions could be slightly different, so keep in mind.
 **CAUTION**: If you proceed with installation all data on your device will **lost**!
 
@@ -75,7 +75,9 @@ Main tinyweb app class.
 
 * `add_route(self, url, f, **kwargs)` - Map `url` into function `f`. Additional keyword arguments are supported:
     * `methods` - List of allowed methods. Defaults to `['GET', 'POST']`
-    * `parse_headers` - Sometimes you don't need / care about HTTP headers. So you can save some CPU cycles / memory by turning headers parse off. Default - `True`
+    * `save_headers` - Due to memory constrains you most likely want to minimze memory usage by saving only headers
+    which you really need in. E.g. for POST requests it is make sense to save at least 'Content-Length' header.
+    Defaults to empty list - `[]`.
     * `max_body_size` - Max HTTP body size (e.g. POST form data). Be careful with large forms due to memory constrains (especially with esp8266 which has 64K RAM). Defaults to `1024`.
     * `allowed_access_control_headers` - Whenever you're using xmlHttpRequest (send JSON from browser) these headers are required to do access control. Defaults to `*`
     * `allowed_access_control_origins` - The same idea as for header above. Defaults to `*`.
@@ -109,30 +111,29 @@ Main tinyweb app class.
 
 #### class `request`
 This class contains everything about *HTTP request*. Use it to get HTTP headers / query string / etc.
-***Warning*** - to improve memory / CPU usage string in `request` class are *binary strings*. This means that you **must** use `b` prefix when accessing items, e.g.
+***Warning*** - to improve memory / CPU usage strings in `request` class are *binary strings*. This means that you **must** use `b` prefix when accessing items, e.g.
 
     >>> print(req.method)
     b'GET'
 
-So be sure to check twice your code which interacts with `request`.
+So be sure to check twice your code which interacts with `request` class.
 
-* `method` - HTTP request method. **Binary** string.
+* `method` - HTTP request method.
 * `path` - URL path.
 * `query_string` - URL path.
-* `headers` - Parsed HTTP headers `dict` of key / value pairs.
+* `headers` - `dict` of saved HTTP headers from request. **Only if enabled by `save_headers`.
     ```python
-    if b'Content-Type' in self.headers:
-        print(self.headers[b'Content-Type'])
+    if b'Content-Length' in self.headers:
+        print(self.headers[b'Content-Length'])
     ```
 
 * `read_parse_form_data()` - By default (again, to save CPU/memory) *tinyweb* doesn't read form data. You have to call it manually unless you're using RESTApi. Returns `dict` of key / value pairs.
 
 #### class `response`
-Use this class to generate some HTTP response. Please be noticed that `response` class is using *regular strings*, not binary strings as for `request` class does.
+Use this class to generate HTTP response. Please be noticed that `response` class is using *regular strings*, not binary strings as `request` class does.
 
 * `code` - HTTP response code. By default set to `200` which means OK, no error.
 * `headers` - HTTP response headers dictionary (key / value pairs).
-
 * `add_header(self, key, value)` - Convenient way to add HTTP response header
     * `key` - Header name
     * `value` - Header value
@@ -140,6 +141,7 @@ Use this class to generate some HTTP response. Please be noticed that `response`
 * `add_access_control_headers(self)` - Add HTTP headers required for RESTAPI (JSON query)
 
 * `redirect(self, location)` - Generate HTTP redirection (HTTP 302 Found) to `location`. This *function is generator*.
+
 * `start_html(self)`- Start response with HTML content type. This *function is generator*. This function is basically sends response line and headers. Refer to [hello world example](https://github.com/belyalov/tinyweb/blob/master/examples/hello_world.py).
 
 * `send(self, payload)` - Sends your string/bytes `payload` to client. Be sure to start your response with `start_html()` or manually. This *function is generator*.

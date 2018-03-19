@@ -106,23 +106,28 @@ class request:
         if len(url_frags) > 1:
             self.query_string = url_frags[1]
 
-    def read_headers(self):
+    def read_headers(self, save_headers=[]):
         """Read and parse HTTP headers until \r\n\r\n:
+        Optional argument 'save_headers' controls which headers to save.
+            This is done mostly to deal with memory constrains.
+
         Function is generator.
 
-        HTTP headers are:
+        HTTP headers could be like:
         Host: google.com
         Content-Type: blah
         \r\n
         """
         while True:
+            gc.collect()
             line = yield from self.reader.readline()
             if line == b'\r\n':
                 break
             frags = line.split(b':', 1)
             if len(frags) != 2:
                 raise HTTPException(400)
-            self.headers[frags[0]] = frags[1].strip()
+            if frags[0] in save_headers:
+                self.headers[frags[0]] = frags[1].strip()
 
     def read_parse_form_data(self):
         """Read HTTP form data (payload), if any.
@@ -399,6 +404,9 @@ class webserver:
             req.params = params
             resp.params = params
 
+            # Read / parse headers
+            yield from req.read_headers(params['save_headers'])
+
             # OPTIONS method is handled automatically
             if req.method == b'OPTIONS':
                 resp.add_access_control_headers()
@@ -414,10 +422,6 @@ class webserver:
             # Ensure that HTTP method is allowed for this path
             if req.method not in params['methods']:
                 raise HTTPException(405)
-
-            # Parse headers, if enabled for this URL
-            if params['parse_headers']:
-                yield from req.read_headers()
 
             # Handle URL
             gc.collect()
@@ -449,7 +453,7 @@ class webserver:
 
         Keyword arguments:
             methods - list of allowed methods. Defaults to ['GET', 'POST']
-            parse_headers - turn on / off HTTP request header parsing. Default - True
+            save_headers - contains list of HTTP headers to be saved. Case sensetive. Default - empty.
             max_body_size - Max HTTP body size (e.g. POST form data). Defaults to 1024
             allowed_access_control_headers - Default value for the same name header. Defaults to *
             allowed_access_control_origins - Default value for the same name header. Defaults to *
@@ -458,15 +462,16 @@ class webserver:
             raise ValueError('Invalid URL')
         # Inital params for route
         params = {'methods': ['GET'],
-                  'parse_headers': True,
+                  'save_headers': [],
                   'max_body_size': 1024,
                   'allowed_access_control_headers': '*',
                   'allowed_access_control_origins': '*',
                   }
         params.update(kwargs)
         params['allowed_access_control_methods'] = ', '.join(params['methods'])
-        # Convert methods to bytestring
+        # Convert methods/headers to bytestring
         params['methods'] = [x.encode() for x in params['methods']]
+        params['save_headers'] = [x.encode() for x in params['save_headers']]
         # If URL has a parameter
         if url.endswith('>'):
             idx = url.rfind('<')
@@ -511,7 +516,10 @@ class webserver:
             if hasattr(obj, fn):
                 methods.append(m)
                 callmap[m.encode()] = (getattr(obj, fn), kwargs)
-        self.add_route(url, restful_resource_handler, methods=methods, _callmap=callmap)
+        self.add_route(url, restful_resource_handler,
+                       methods=methods,
+                       save_headers=['Content-Length', 'Content-Type'],
+                       _callmap=callmap)
 
     def route(self, url, **kwargs):
         """Decorator for add_route()
