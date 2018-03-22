@@ -6,7 +6,7 @@ MIT license
 import uasyncio as asyncio
 import ujson as json
 import gc
-import os
+import uos as os
 import sys
 
 

@@ -6,7 +6,7 @@ MIT license
 """
 
 import unittest
-import os
+import uos as os
 from tinyweb import webserver
 from tinyweb.server import get_file_mime_type, urldecode_plus, parse_query_string
 from tinyweb.server import request, HTTPException
@@ -704,7 +704,7 @@ class StaticContent(unittest.TestCase):
 
     def tearDown(self):
         try:
-            os.remove(self.tempfn)
+            os.unlink(self.tempfn)
         except OSError:
             pass
 
@@ -758,7 +758,7 @@ class StaticContent(unittest.TestCase):
         wrt = mockWriter()
 
         # Intentionally delete file before request
-        os.remove(self.tempfn)
+        os.unlink(self.tempfn)
         run_generator(self.srv._handler(rdr, wrt))
 
         exp = ['HTTP/1.0 404 Not Found\r\n',
