@@ -10,30 +10,34 @@ install:
   - sudo apt-get update
   - sudo apt-get install --no-install-recommends --no-install-suggests -y build-essential libreadline-dev libffi-dev pkg-config
   - sudo pip install pycodestyle
+  # clone micropython, belyalov's fork of micropython-lib
   - git clone --recurse-submodules https://github.com/micropython/micropython.git
-  - git clone https://github.com/micropython/micropython-lib.git
-  - cd ./micropython/ports/unix
-  - make axtls
-  - sudo make install
-  - micropython -m upip install micropython-uasyncio micropython-unittest micropython-os
-  - cd ../../../
-  - ln -sf `pwd`/tinyweb/ ~/.micropython/lib/tinyweb
+  - git clone https://github.com/belyalov/micropython-lib.git
+  # make symlinks to required modules
+  - export MDST=~/.micropython/lib/
+  - mkdir -p $MDST
+  - ln -s `pwd`/micropython-lib/unittest/unittest.py $MDST
+  - ln -s ../../uasyncio.core/uasyncio/core.py `pwd`/micropython-lib/uasyncio/uasyncio
+  - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MDST/uasyncio
+  - ln -s `pwd`/tinyweb $MDST/tinyweb
+  # compile/install micropython
+  - sudo make -C micropython/ports/unix axtls install
 
 script:
   # Run style checks
-  - pycodestyle --ignore=E501 tinyweb/*.py test/*.py
+  - pycodestyle --ignore=E501 tinyweb/ test/
   # Run unittests
   - ./test/test_server.py
-  # Compile firmware for esp8266
-  - cp -R tinyweb/ micropython/ports/esp8266/modules/tinyweb
-  - cp -R micropython-lib/uasyncio/uasyncio/ micropython/ports/esp8266/modules/uasyncio
-  - cp micropython-lib/uasyncio.core/uasyncio/core.py micropython/ports/esp8266/modules/uasyncio
+  # Copy modules to be frozen and compile firmware for esp8266
+  - export MPORT=micropython/ports/esp8266/modules
+  - ln -s `pwd`/tinyweb $MPORT/tinyweb
+  - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MPORT/uasyncio
   - docker run -v`pwd`/micropython:/micropython arsenicus/esp-open-sdk /bin/bash -c ". ~/.bashrc && cd /micropython/ports/esp8266 && make"
   - cp micropython/ports/esp8266/build/firmware-combined.bin ./firmware_esp8266.bin
   # Compile firmware for esp32
-  - cp -R tinyweb/ micropython/ports/esp32/modules/tinyweb
-  - cp -R micropython-lib/uasyncio/uasyncio/ micropython/ports/esp32/modules/uasyncio
-  - cp micropython-lib/uasyncio.core/uasyncio/core.py micropython/ports/esp32/modules/uasyncio
+  - export MPORT=micropython/ports/esp32/modules
+  - ln -s `pwd`/tinyweb $MPORT/tinyweb
+  - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MPORT/uasyncio
   - docker run -v`pwd`/micropython:/micropython arsenicus/esp32-open-sdk /bin/bash -c ". ~/.bashrc && cd /micropython/ports/esp32 && make"
   - cp micropython/ports/esp32/build/firmware.bin ./firmware_esp32.bin
 
