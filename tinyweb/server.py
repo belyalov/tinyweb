@@ -226,7 +226,7 @@ class response:
         if msg:
             yield from self.send(msg)
 
-    def redirect(self, location):
+    def redirect(self, location, msg=None):
         """Generate HTTP redirect response to 'location'.
         Basically it will generate HTTP 302 with 'Location' header
 
@@ -239,8 +239,12 @@ class response:
         """
         self.code = 302
         self.add_header('Location', location)
+        if msg:
+            self.add_header('Content-Length', len(msg))
         yield from self._send_response_line()
         yield from self._send_headers()
+        if msg:
+            yield from self.send(msg)
 
     def add_header(self, key, value):
         """Add HTTP response header
