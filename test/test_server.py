@@ -317,7 +317,7 @@ class ServerFull(unittest.TestCase):
         yield from resp.send('<html><h1>Hello world</h1></html>')
 
     def redirect_handler(self, req, resp):
-        yield from resp.redirect('/blahblah')
+        yield from resp.redirect('/blahblah', msg='msg:)')
 
     def testStartHTML(self):
         """Verify that request.start_html() works well"""
@@ -344,7 +344,10 @@ class ServerFull(unittest.TestCase):
         # "Send" request
         run_generator(srv._handler(rdr, wrt))
         # Ensure that proper response "sent"
-        self.assertEqual(wrt.history, ['HTTP/1.0 302 Found\r\n', 'Location: /blahblah\r\n\r\n'])
+        exp = ['HTTP/1.0 302 Found\r\n',
+               'Location: /blahblah\r\nContent-Length: 5\r\n\r\n',
+               'msg:)']
+        self.assertEqual(wrt.history, exp)
 
     def testRequestBodyUnknownType(self):
         """Unknow HTTP body test - empty dict expected"""
