@@ -16,20 +16,20 @@ def urldecode_plus(s):
     Returns decoded string
     """
     s = s.replace('+', ' ')
-    arr1 = s.split('%')
-    arr2 = [arr1[0]]
-    for it in arr1[1:]:
+    arr = s.split('%')
+    res = arr[0]
+    for it in arr[1:]:
         if len(it) >= 2:
-            arr2.append(chr(int(it[:2], 16)) + it[2:])
+            res += chr(int(it[:2], 16)) + it[2:]
         elif len(it) == 0:
-            arr2.append('%')
+            res += '%'
         else:
-            arr2.append(it)
-    return ''.join(arr2)
+            res += it
+    return res
 
 
 def parse_query_string(s):
-    """Parse urlencoded string andinto dict.
+    """Parse urlencoded string into dict.
 
     Returns dict
     """
@@ -183,29 +183,30 @@ class response:
                                   413: 'Payload Too Large',
                                   500: 'Internal Server Error'}
 
-    def _send_response_line(self):
-        """Compose and send HTTP response line.
-        Function is generator.
+    def _send_headers(self):
+        """Compose and send:
+        - HTTP request line
+        - HTTP headers following by \r\n.
+        This function is generator.
+
+        P.S.
+        Because of usually we have only a few HTTP headers (2-5) it doesn't make sense
+        to send them separately - sometimes it could increase latency.
+        So combining headers together and send them as single "packet".
         """
+        # Request line
         if self.code in self.http_status_codes:
             msg = self.http_status_codes[self.code]
+            hdrs = 'HTTP/1.0 {} {}\r\n'.format(self.code, msg)
         else:
-            msg = 'NA'
-        yield from self.send('HTTP/1.0 {} {}\r\n'.format(self.code, msg))
-
-    def _send_headers(self):
-        """Compose and send HTTP headers following by \r\n.
-        This function is generator.
-        """
-        # Because of usually we have only a few HTTP headers (2-5) it doesn't make sense
-        # to send them separately - sometimes it could increase latency.
-        # So combining headers together and send them as single "packet".
-        hdrs = []
+            hdrs = 'HTTP/1.0 {} NA\r\n'.format(self.code)
+        # Headers
         for k, v in self.headers.items():
-            hdrs.append('{}: {}'.format(k, v))
-        # Empty line after headers
-        hdrs.append('\r\n')
-        yield from self.send('\r\n'.join(hdrs))
+            hdrs += '{}: {}\r\n'.format(k, v)
+        hdrs += '\r\n'
+        # Collect garbage after small mallocs
+        gc.collect()
+        yield from self.send(hdrs)
 
     def error(self, code, msg=None):
         """Generate HTTP error response
@@ -221,7 +222,6 @@ class response:
         self.code = code
         if msg:
             self.add_header('Content-Length', len(msg))
-        yield from self._send_response_line()
         yield from self._send_headers()
         if msg:
             yield from self.send(msg)
@@ -241,7 +241,6 @@ class response:
         self.add_header('Location', location)
         if msg:
             self.add_header('Content-Length', len(msg))
-        yield from self._send_response_line()
         yield from self._send_headers()
         if msg:
             yield from self.send(msg)
@@ -275,7 +274,6 @@ class response:
             yield from resp.send('<html><h1>Hello, world!</h1></html>')
         """
         self.add_header('Content-Type', 'text/html')
-        yield from self._send_response_line()
         yield from self._send_headers()
 
     def send_file(self, filename, content_type=None, content_encoding=None, max_age=2592000):
@@ -316,7 +314,6 @@ class response:
             # override it by setting max_age to zero
             self.add_header('Cache-Control', 'max-age={}, public'.format(max_age))
             with open(filename) as f:
-                yield from self._send_response_line()
                 yield from self._send_headers()
                 buf = bytearray(128)
                 while True:
@@ -352,14 +349,17 @@ def restful_resource_handler(req, resp, param=None):
         resp.code = res[1]
         res = res[0]
     elif res is None:
-        raise Exception('Restful handler must return tuple/dict')
+        raise Exception('Restful handler must return dict/str with optional error code')
 
     # Send response
-    res_str = json.dumps(res)
+    gc.collect()
+    if type(res) is dict:
+        res_str = json.dumps(res)
+    else:
+        res_str = res
     resp.add_header('Content-Type', 'application/json')
     resp.add_header('Content-Length', str(len(res_str)))
     resp.add_access_control_headers()
-    yield from resp._send_response_line()
     yield from resp._send_headers()
     yield from resp.send(res_str)
 
@@ -419,7 +419,6 @@ class webserver:
                 # otherwise some webkit based browsers (Chrome)
                 # treat this behavior as an error
                 resp.add_header('Content-Length', '0')
-                yield from resp._send_response_line()
                 yield from resp._send_headers()
                 return
 

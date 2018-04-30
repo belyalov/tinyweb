@@ -270,7 +270,7 @@ class ServerFull(unittest.TestCase):
     def setUp(self):
         self.dummy_called = False
         self.data = {}
-        self.hello_world_history = ['HTTP/1.0 200 OK\r\n',
+        self.hello_world_history = ['HTTP/1.0 200 OK\r\n' +
                                     'Content-Type: text/html\r\n\r\n',
                                     '<html><h1>Hello world</h1></html>']
 
@@ -283,7 +283,7 @@ class ServerFull(unittest.TestCase):
         # "Send" request
         run_generator(server_for_decorators._handler(rdr, wrt))
         # Ensure that proper response "sent"
-        expected = ['HTTP/1.0 200 OK\r\n',
+        expected = ['HTTP/1.0 200 OK\r\n' +
                     'Content-Type: text/html\r\n\r\n',
                     'YO, man1']
         self.assertEqual(wrt.history, expected)
@@ -296,7 +296,7 @@ class ServerFull(unittest.TestCase):
         # "Send" request
         run_generator(server_for_decorators._handler(rdr, wrt))
         # Ensure that proper response "sent"
-        expected = ['HTTP/1.0 200 OK\r\n',
+        expected = ['HTTP/1.0 200 OK\r\n' +
                     'Content-Type: text/html\r\n\r\n',
                     'YO, man2']
         self.assertEqual(wrt.history, expected)
@@ -344,7 +344,7 @@ class ServerFull(unittest.TestCase):
         # "Send" request
         run_generator(srv._handler(rdr, wrt))
         # Ensure that proper response "sent"
-        exp = ['HTTP/1.0 302 Found\r\n',
+        exp = ['HTTP/1.0 302 Found\r\n' +
                'Location: /blahblah\r\nContent-Length: 5\r\n\r\n',
                'msg:)']
         self.assertEqual(wrt.history, exp)
@@ -412,7 +412,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         # payload broken - HTTP 400 expected
-        self.assertEqual(wrt.history, ['HTTP/1.0 400 Bad Request\r\n', '\r\n'])
+        self.assertEqual(wrt.history, ['HTTP/1.0 400 Bad Request\r\n\r\n'])
 
     def testRequestLargeBody(self):
         """Max Body size check"""
@@ -430,7 +430,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
         # payload broken - HTTP 400 expected
-        self.assertEqual(wrt.history, ['HTTP/1.0 413 Payload Too Large\r\n', '\r\n'])
+        self.assertEqual(wrt.history, ['HTTP/1.0 413 Payload Too Large\r\n\r\n'])
 
     def route_parameterized_handler(self, req, resp, user_name):
         yield from resp.start_html()
@@ -447,7 +447,7 @@ class ServerFull(unittest.TestCase):
         # "Send" request
         run_generator(srv._handler(rdr, wrt))
         # Ensure that proper response "sent"
-        expected = ['HTTP/1.0 200 OK\r\n',
+        expected = ['HTTP/1.0 200 OK\r\n' +
                     'Content-Type: text/html\r\n\r\n',
                     '<html>Hello, user1</html>']
         self.assertEqual(wrt.history, expected)
@@ -493,8 +493,7 @@ class ServerFull(unittest.TestCase):
         run_generator(srv._handler(rdr, wrt))
         # Hanlder should not be called - method not allowed
         self.assertFalse(self.dummy_called)
-        exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
-               '\r\n']
+        exp = ['HTTP/1.0 405 Method Not Allowed\r\n\r\n']
         self.assertEqual(wrt.history, exp)
         # Connection must be closed
         self.assertTrue(wrt.closed)
@@ -509,7 +508,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         run_generator(srv._handler(rdr, wrt))
 
-        exp = ['HTTP/1.0 200 OK\r\n',
+        exp = ['HTTP/1.0 200 OK\r\n' +
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 0\r\n'
                'Access-Control-Allow-Origin: *\r\n'
@@ -525,7 +524,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         srv = webserver()
         run_generator(srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 404 Not Found\r\n',
+        exp = ['HTTP/1.0 404 Not Found\r\n' +
                'Content-Length: 14\r\n\r\n',
                'Page Not Found']
         self.assertEqual(wrt.history, exp)
@@ -540,8 +539,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         srv = webserver()
         run_generator(srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 400 Bad Request\r\n',
-               '\r\n']
+        exp = ['HTTP/1.0 400 Bad Request\r\n\r\n']
         self.assertEqual(wrt.history, exp)
         # Connection must be closed
         self.assertTrue(wrt.closed)
@@ -601,7 +599,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_generator(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n',
+        exp = ['HTTP/1.0 200 OK\r\n' +
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 0\r\n'
                'Access-Control-Allow-Origin: *\r\n'
@@ -613,7 +611,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_generator(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n',
+        exp = ['HTTP/1.0 200 OK\r\n' +
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 17\r\n'
@@ -627,7 +625,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_generator(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n',
+        exp = ['HTTP/1.0 200 OK\r\n' +
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 18\r\n'
@@ -641,7 +639,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_generator(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n',
+        exp = ['HTTP/1.0 200 OK\r\n' +
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 22\r\n'
@@ -659,7 +657,7 @@ class ServerResource(unittest.TestCase):
                           '{"body": "body1"}'])
         wrt = mockWriter()
         run_generator(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n',
+        exp = ['HTTP/1.0 200 OK\r\n' +
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 30\r\n'
@@ -673,8 +671,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_generator(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 405 Method Not Allowed\r\n',
-               '\r\n']
+        exp = ['HTTP/1.0 405 Method Not Allowed\r\n\r\n']
         self.assertEqual(wrt.history, exp)
 
     def testException(self):
@@ -682,8 +679,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_generator(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 500 Internal Server Error\r\n',
-               '\r\n']
+        exp = ['HTTP/1.0 500 Internal Server Error\r\n\r\n']
         self.assertEqual(wrt.history, exp)
 
     def testBrokenPipe(self):
@@ -725,7 +721,7 @@ class StaticContent(unittest.TestCase):
         wrt = mockWriter()
         run_generator(self.srv._handler(rdr, wrt))
 
-        exp = ['HTTP/1.0 200 OK\r\n',
+        exp = ['HTTP/1.0 200 OK\r\n' +
                'Content-Type: text/html\r\n'
                'Content-Length: 21\r\n'
                'Cache-Control: max-age=2592000, public\r\n\r\n',
@@ -744,7 +740,7 @@ class StaticContent(unittest.TestCase):
         wrt = mockWriter()
         run_generator(self.srv._handler(rdr, wrt))
 
-        exp = ['HTTP/1.0 200 OK\r\n',
+        exp = ['HTTP/1.0 200 OK\r\n' +
                'Cache-Control: max-age=100, public\r\n'
                'Content-Type: text/plain\r\n'
                'Content-Length: 21\r\n'
@@ -764,7 +760,7 @@ class StaticContent(unittest.TestCase):
         os.unlink(self.tempfn)
         run_generator(self.srv._handler(rdr, wrt))
 
-        exp = ['HTTP/1.0 404 Not Found\r\n',
+        exp = ['HTTP/1.0 404 Not Found\r\n' +
                'Content-Length: 14\r\n\r\n',
                'File Not Found']
         self.assertEqual(wrt.history, exp)
