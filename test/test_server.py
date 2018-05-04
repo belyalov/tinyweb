@@ -7,6 +7,7 @@ MIT license
 
 import unittest
 import uos as os
+import uerrno as errno
 from tinyweb import webserver
 from tinyweb.server import get_file_mime_type, urldecode_plus, parse_query_string
 from tinyweb.server import request, HTTPException
@@ -47,13 +48,20 @@ class mockReader():
 class mockWriter():
     """Mock for coroutine writer class"""
 
-    def __init__(self):
+    def __init__(self, generate_expection=None):
+        """
+        keyword arguments:
+            generate_expection - raise exception when calling send()
+        """
         self.history = []
         self.closed = False
+        self.generate_expection = generate_expection
 
     def awrite(self, buf, off=0, sz=-1):
         if sz == -1:
             sz = len(buf) - off
+        if self.generate_expection:
+            raise self.generate_expection
         # Make this function to be as generator
         yield
         # Save biffer into history - so to be able to assert then
@@ -764,6 +772,19 @@ class StaticContent(unittest.TestCase):
                'Content-Length: 14\r\n\r\n',
                'File Not Found']
         self.assertEqual(wrt.history, exp)
+        self.assertTrue(wrt.closed)
+
+    def testSendFileConnectionReset(self):
+        self.srv.add_route('/', self.send_file_handler)
+        rdr = mockReader(['GET / HTTP/1.0\r\n',
+                          HDRE])
+        # tell mockWrite to raise error during send()
+        wrt = mockWriter(generate_expection=OSError(errno.ECONNRESET))
+
+        run_generator(self.srv._handler(rdr, wrt))
+
+        # there should be no payload due to connected reset
+        self.assertEqual(wrt.history, [])
         self.assertTrue(wrt.closed)
 
 

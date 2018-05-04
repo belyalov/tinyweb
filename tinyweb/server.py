@@ -8,6 +8,7 @@ import ujson as json
 import gc
 import uos as os
 import sys
+import uerrno as errno
 
 
 def urldecode_plus(s):
@@ -67,7 +68,7 @@ def get_file_mime_type(fname):
 
 
 class HTTPException(Exception):
-    """HTTP protocol expections"""
+    """HTTP protocol exceptions"""
 
     def __init__(self, code=400, message=None):
         self.code = code
@@ -322,7 +323,11 @@ class response:
                         break
                     yield from self.send(buf, sz=size)
         except OSError as e:
-            raise HTTPException(404, 'File Not Found')
+            # special handling for ENOENT / EACCESS
+            if e.args[0] in (errno.ENOENT, errno.EACCES):
+                raise HTTPException(404, 'File Not Found')
+            else:
+                raise
 
 
 def restful_resource_handler(req, resp, param=None):
@@ -434,16 +439,26 @@ class webserver:
                 yield from handler(req, resp)
             # Done
         except OSError as e:
-            # Do not send response in case of "Broken Pipe", its too late :)
-            if e.args[0] != 32:
-                yield from resp.error(500)
+            # Do not send response for connection related errors - too late :)
+            # P.S. code 32 - is possible BROKEN PIPE error (TODO: is it true?)
+            if e.args[0] not in (errno.ECONNABORTED, errno.ECONNRESET, 32):
+                try:
+                    yield from resp.error(500)
+                except Exception as e:
+                    sys.print_exception(e)
         except HTTPException as e:
-            yield from resp.error(e.code, e.message)
+            try:
+                yield from resp.error(e.code, e.message)
+            except Exception as e:
+                sys.print_exception(e)
         except Exception as e:
             print('-' * 40)
-            print('Unhandled expection in "{}"'.format(req.path.decode()))
+            print('Unhandled exception in "{}"'.format(req.path.decode()))
             sys.print_exception(e)
-            yield from resp.error(500)
+            try:
+                yield from resp.error(500)
+            except Exception as e:
+                pass
         finally:
             yield from writer.aclose()
 
@@ -456,14 +471,14 @@ class webserver:
 
         Keyword arguments:
             methods - list of allowed methods. Defaults to ['GET', 'POST']
-            save_headers - contains list of HTTP headers to be saved. Case sensetive. Default - empty.
+            save_headers - contains list of HTTP headers to be saved. Case sensitive. Default - empty.
             max_body_size - Max HTTP body size (e.g. POST form data). Defaults to 1024
             allowed_access_control_headers - Default value for the same name header. Defaults to *
             allowed_access_control_origins - Default value for the same name header. Defaults to *
         """
         if url == '' or '?' in url:
             raise ValueError('Invalid URL')
-        # Inital params for route
+        # Initial params for route
         params = {'methods': ['GET'],
                   'save_headers': [],
                   'max_body_size': 1024,
