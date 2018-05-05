@@ -25,7 +25,7 @@ install:
 
 script:
   # Run style checks
-  - pycodestyle --ignore=E501 tinyweb/ test/
+  - pycodestyle --ignore=E501,W504 tinyweb/ test/
   # Run unittests
   - ./test/test_server.py
   # Copy modules to be frozen and compile firmware for esp8266
