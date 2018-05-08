@@ -85,7 +85,7 @@ class request:
         self.path = b''
         self.query_string = b''
 
-    def read_request_line(self):
+    async def read_request_line(self):
         """Read and parse first line (AKA HTTP Request Line).
         Function is generator.
 
@@ -93,7 +93,7 @@ class request:
         GET /something/script?param1=val1 HTTP/1.1
         """
         while True:
-            rl = yield from self.reader.readline()
+            rl = await self.reader.readline()
             # skip empty lines
             if rl == b'\r\n' or rl == b'\n':
                 continue
@@ -107,7 +107,7 @@ class request:
         if len(url_frags) > 1:
             self.query_string = url_frags[1]
 
-    def read_headers(self, save_headers=[]):
+    async def read_headers(self, save_headers=[]):
         """Read and parse HTTP headers until \r\n\r\n:
         Optional argument 'save_headers' controls which headers to save.
             This is done mostly to deal with memory constrains.
@@ -121,7 +121,7 @@ class request:
         """
         while True:
             gc.collect()
-            line = yield from self.reader.readline()
+            line = await self.reader.readline()
             if line == b'\r\n':
                 break
             frags = line.split(b':', 1)
@@ -130,7 +130,7 @@ class request:
             if frags[0] in save_headers:
                 self.headers[frags[0]] = frags[1].strip()
 
-    def read_parse_form_data(self):
+    async def read_parse_form_data(self):
         """Read HTTP form data (payload), if any.
         Function is generator.
 
@@ -151,7 +151,7 @@ class request:
         size = int(self.headers[b'Content-Length'])
         if size > self.params['max_body_size'] or size < 0:
             raise HTTPException(413)
-        data = yield from self.reader.readexactly(size)
+        data = await self.reader.readexactly(size)
         # Use only string before ';', e.g:
         # application/x-www-form-urlencoded; charset=UTF-8
         ct = self.headers[b'Content-Type'].split(b';', 1)[0]
@@ -184,7 +184,7 @@ class response:
                                   413: 'Payload Too Large',
                                   500: 'Internal Server Error'}
 
-    def _send_headers(self):
+    async def _send_headers(self):
         """Compose and send:
         - HTTP request line
         - HTTP headers following by \r\n.
@@ -207,9 +207,9 @@ class response:
         hdrs += '\r\n'
         # Collect garbage after small mallocs
         gc.collect()
-        yield from self.send(hdrs)
+        await self.send(hdrs)
 
-    def error(self, code, msg=None):
+    async def error(self, code, msg=None):
         """Generate HTTP error response
         This function is generator.
 
@@ -218,16 +218,16 @@ class response:
 
         Example:
             # Not enough permissions. Send HTTP 403 - Forbidden
-            yield from resp.error(403)
+            await resp.error(403)
         """
         self.code = code
         if msg:
             self.add_header('Content-Length', len(msg))
-        yield from self._send_headers()
+        await self._send_headers()
         if msg:
-            yield from self.send(msg)
+            await self.send(msg)
 
-    def redirect(self, location, msg=None):
+    async def redirect(self, location, msg=None):
         """Generate HTTP redirect response to 'location'.
         Basically it will generate HTTP 302 with 'Location' header
 
@@ -236,15 +236,15 @@ class response:
 
         Example:
             # Redirect to /something
-            yield from resp.redirect('/something')
+            await resp.redirect('/something')
         """
         self.code = 302
         self.add_header('Location', location)
         if msg:
             self.add_header('Content-Length', len(msg))
-        yield from self._send_headers()
+        await self._send_headers()
         if msg:
-            yield from self.send(msg)
+            await self.send(msg)
 
     def add_header(self, key, value):
         """Add HTTP response header
@@ -266,18 +266,18 @@ class response:
         self.add_header('Access-Control-Allow-Methods', self.params['allowed_access_control_methods'])
         self.add_header('Access-Control-Allow-Headers', self.params['allowed_access_control_headers'])
 
-    def start_html(self):
+    async def start_html(self):
         """Start response with HTML content type.
         This function is generator.
 
         Example:
-            yield from resp.start_html()
-            yield from resp.send('<html><h1>Hello, world!</h1></html>')
+            await resp.start_html()
+            await resp.send('<html><h1>Hello, world!</h1></html>')
         """
         self.add_header('Content-Type', 'text/html')
-        yield from self._send_headers()
+        await self._send_headers()
 
-    def send_file(self, filename, content_type=None, content_encoding=None, max_age=2592000):
+    async def send_file(self, filename, content_type=None, content_encoding=None, max_age=2592000):
         """Send local file as HTTP response.
         This function is generator.
 
@@ -290,13 +290,13 @@ class response:
                       Set to 0 - to disable caching.
 
         Example 1: Default use case:
-            yield from resp.send_file('images/cat.jpg')
+            await resp.send_file('images/cat.jpg')
 
         Example 2: Disable caching:
-            yield from resp.send_file('static/index.html', max_age=0)
+            await resp.send_file('static/index.html', max_age=0)
 
         Example 3: Override content type:
-            yield from resp.send_file('static/file.bin', content_type='application/octet-stream')
+            await resp.send_file('static/file.bin', content_type='application/octet-stream')
         """
         try:
             # Get file size
@@ -315,13 +315,13 @@ class response:
             # override it by setting max_age to zero
             self.add_header('Cache-Control', 'max-age={}, public'.format(max_age))
             with open(filename) as f:
-                yield from self._send_headers()
+                await self._send_headers()
                 buf = bytearray(128)
                 while True:
                     size = f.readinto(buf)
                     if size == 0:
                         break
-                    yield from self.send(buf, sz=size)
+                    await self.send(buf, sz=size)
         except OSError as e:
             # special handling for ENOENT / EACCESS
             if e.args[0] in (errno.ENOENT, errno.EACCES):
@@ -330,10 +330,10 @@ class response:
                 raise
 
 
-def restful_resource_handler(req, resp, param=None):
+async def restful_resource_handler(req, resp, param=None):
     """Handler for RESTful API endpoins"""
     # Gather data - query string, JSON in request body...
-    data = yield from req.read_parse_form_data()
+    data = await req.read_parse_form_data()
     # Add parameters from URI query string as well
     # This one is actually for simply development of RestAPI
     if req.query_string != b'':
@@ -365,8 +365,8 @@ def restful_resource_handler(req, resp, param=None):
     resp.add_header('Content-Type', 'application/json')
     resp.add_header('Content-Length', str(len(res_str)))
     resp.add_access_control_headers()
-    yield from resp._send_headers()
-    yield from resp.send(res_str)
+    await resp._send_headers()
+    await resp.send(res_str)
 
 
 class webserver:
@@ -393,7 +393,7 @@ class webserver:
         # No handler found
         return (None, None)
 
-    def _handler(self, reader, writer):
+    async def _handler(self, reader, writer):
         """Handler for TCP connection with
         HTTP/1.0 protocol implementation
         """
@@ -403,7 +403,7 @@ class webserver:
             # Read HTTP Request Line
             req = request(reader)
             resp = response(writer)
-            yield from req.read_request_line()
+            await req.read_request_line()
 
             # Find URL handler
             handler, params = self._find_url_handler(req)
@@ -414,7 +414,7 @@ class webserver:
             resp.params = params
 
             # Read / parse headers
-            yield from req.read_headers(params['save_headers'])
+            await req.read_headers(params['save_headers'])
 
             # OPTIONS method is handled automatically
             if req.method == b'OPTIONS':
@@ -424,7 +424,7 @@ class webserver:
                 # otherwise some webkit based browsers (Chrome)
                 # treat this behavior as an error
                 resp.add_header('Content-Length', '0')
-                yield from resp._send_headers()
+                await resp._send_headers()
                 return
 
             # Ensure that HTTP method is allowed for this path
@@ -434,21 +434,21 @@ class webserver:
             # Handle URL
             gc.collect()
             if hasattr(req, '_param'):
-                yield from handler(req, resp, req._param)
+                await handler(req, resp, req._param)
             else:
-                yield from handler(req, resp)
+                await handler(req, resp)
             # Done
         except OSError as e:
             # Do not send response for connection related errors - too late :)
             # P.S. code 32 - is possible BROKEN PIPE error (TODO: is it true?)
             if e.args[0] not in (errno.ECONNABORTED, errno.ECONNRESET, 32):
                 try:
-                    yield from resp.error(500)
+                    await resp.error(500)
                 except Exception as e:
                     sys.print_exception(e)
         except HTTPException as e:
             try:
-                yield from resp.error(e.code, e.message)
+                await resp.error(e.code, e.message)
             except Exception as e:
                 sys.print_exception(e)
         except Exception as e:
@@ -456,11 +456,11 @@ class webserver:
             print('Unhandled exception in "{}"'.format(req.path.decode()))
             sys.print_exception(e)
             try:
-                yield from resp.error(500)
+                await resp.error(500)
             except Exception as e:
                 pass
         finally:
-            yield from writer.aclose()
+            await writer.aclose()
 
     def add_route(self, url, f, **kwargs):
         """Add URL to function mapping.
@@ -545,8 +545,8 @@ class webserver:
         Example:
             @app.route('/')
             def index(req, resp):
-                yield from resp.start_html()
-                yield from resp.send('<html><body><h1>Hello, world!</h1></html>\n')
+                await resp.start_html()
+                await resp.send('<html><body><h1>Hello, world!</h1></html>\n')
         """
         def _route(f):
             self.add_route(url, f, **kwargs)

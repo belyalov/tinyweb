@@ -23,33 +23,33 @@ app = tinyweb.server.webserver()
 # Index page
 @app.route('/')
 @app.route('/index.html')
-def index(req, resp):
-    yield from resp.send_file('static/index.html')
+async def index(req, resp):
+    await resp.send_file('static/index.html')
 
 
 # JS files.
 # Since ESP8266 is low memory platform - it totally make sense to
 # pre-gzip all large files (>1k) and then send gzipped version
 @app.route('/js/<fn>')
-def files_js(req, resp, fn):
-    yield from resp.send_file('static/js/{}.gz'.format(fn),
-                              content_type='application/javascript',
-                              content_encoding='gzip')
+async def files_js(req, resp, fn):
+    await resp.send_file('static/js/{}.gz'.format(fn),
+                         content_type='application/javascript',
+                         content_encoding='gzip')
 
 
 # The same for css files - e.g.
 # Raw version of bootstrap.min.css is about 146k, compare to gzipped version - 20k
 @app.route('/css/<fn>')
-def files_css(req, resp, fn):
-    yield from resp.send_file('static/css/{}.gz'.format(fn),
-                              content_type='text/css',
-                              content_encoding='gzip')
+async def files_css(req, resp, fn):
+    await resp.send_file('static/css/{}.gz'.format(fn),
+                         content_type='text/css',
+                         content_encoding='gzip')
 
 
 # Images
 @app.route('/images/<fn>')
-def files_images(req, resp, fn):
-    yield from resp.send_file('static/images/{}'.format(fn))
+async def files_images(req, resp, fn):
+    await resp.send_file('static/images/{}'.format(fn))
 
 
 # RESTAPI: System status

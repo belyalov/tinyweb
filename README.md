@@ -48,15 +48,15 @@ app = tinyweb.webserver()
 # Hello world index page (just to be sure - let's handle most popular index links)
 @app.route('/')
 @app.route('/index.html')
-def index(req, resp):
-    yield from resp.start_html()
-    yield from resp.send('<html><body><h1>Hello, world!</h1></html>\n')
+async def index(req, resp):
+    await resp.start_html()
+    await resp.send('<html><body><h1>Hello, world!</h1></html>\n')
 
 # Images (you need to put some images into 'images/' folder)
 @app.route('/images/<fn>')
-def images(req, resp, fn):
+async def images(req, resp, fn):
     # Send picture. Filename - in just a parameter
-    yield from resp.send_file('images/{}'.format(fn))
+    await resp.send_file('images/{}'.format(fn))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80)
@@ -85,8 +85,8 @@ Main tinyweb app class.
 * `@route` - simple and useful decorator (inspired by *Flask*). Instead of using add_route() directly - just decorate your function with `@route`, like this:
     ```python
     @app.route('/index.html')
-    def index(req, resp):
-        yield from resp.send_file('static/index.simple.html')
+    async def index(req, resp):
+        await resp.send_file('static/index.simple.html')
     ```
 * `add_resource(self, cls, url, **kwargs)` - RestAPI: Map resource class `cls` to `url`.  Class `cls` is arbitrary class with with implementation of HTTP methods:
     ```python
@@ -140,11 +140,11 @@ Use this class to generate HTTP response. Please be noticed that `response` clas
 
 * `add_access_control_headers(self)` - Add HTTP headers required for RESTAPI (JSON query)
 
-* `redirect(self, location)` - Generate HTTP redirection (HTTP 302 Found) to `location`. This *function is generator*.
+* `redirect(self, location)` - Generate HTTP redirection (HTTP 302 Found) to `location`. This *function is coroutine*.
 
-* `start_html(self)`- Start response with HTML content type. This *function is generator*. This function is basically sends response line and headers. Refer to [hello world example](https://github.com/belyalov/tinyweb/blob/master/examples/hello_world.py).
+* `start_html(self)`- Start response with HTML content type. This *function is coroutine*. This function is basically sends response line and headers. Refer to [hello world example](https://github.com/belyalov/tinyweb/blob/master/examples/hello_world.py).
 
-* `send(self, payload)` - Sends your string/bytes `payload` to client. Be sure to start your response with `start_html()` or manually. This *function is generator*.
+* `send(self, payload)` - Sends your string/bytes `payload` to client. Be sure to start your response with `start_html()` or manually. This *function is coroutine*.
 
 * `send_file(self, filename)`: Send local file as HTTP response. File type will be detected automatically unless you explicitly change it. If file doesn't exists - HTTP Error `404` will be generated.
 Additional keyword arguments
@@ -152,4 +152,4 @@ Additional keyword arguments
     * `content_encoding` - Specifies used compression type, e.g. `gzip`. By default - `None` which means don't add this header.
     * `max_age` - Cache control. How long browser can keep this file on disk. Value is in `seconds`. By default - 30 days. To disable caching, set it to `0`.
 
-* `error(self, code)` - Generate HTTP error response with error `code`. This *function is generator*.
+* `error(self, code)` - Generate HTTP error response with error `code`. This *function is coroutine*.
