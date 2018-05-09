@@ -370,9 +370,18 @@ async def restful_resource_handler(req, resp, param=None):
 
 
 class webserver:
-    """Simple web server class"""
 
-    def __init__(self):
+    def __init__(self, request_timeout=3):
+        """Simple Web Server class.
+        Keyword arguments:
+            request_timeout - time for client to send complete request
+                              after that connection will be closed.
+                              Due to tiny implementation maximum timeout could
+                              be request_timeout * 2 - we'll be waiting first time
+                              for request line to be received and second time
+                              for headers
+        """
+        self.request_timeout = request_timeout
         self.explicit_url_map = {}
         self.parameterized_url_map = {}
 
@@ -403,7 +412,8 @@ class webserver:
             # Read HTTP Request Line
             req = request(reader)
             resp = response(writer)
-            await req.read_request_line()
+            await asyncio.wait_for(req.read_request_line(),
+                                   self.request_timeout)
 
             # Find URL handler
             handler, params = self._find_url_handler(req)
@@ -414,7 +424,8 @@ class webserver:
             resp.params = params
 
             # Read / parse headers
-            await req.read_headers(params['save_headers'])
+            await asyncio.wait_for(req.read_headers(params['save_headers']),
+                                   self.request_timeout)
 
             # OPTIONS method is handled automatically
             if req.method == b'OPTIONS':
@@ -437,7 +448,9 @@ class webserver:
                 await handler(req, resp, req._param)
             else:
                 await handler(req, resp)
-            # Done
+            # Done here
+        except asyncio.TimeoutError:
+            pass
         except OSError as e:
             # Do not send response for connection related errors - too late :)
             # P.S. code 32 - is possible BROKEN PIPE error (TODO: is it true?)

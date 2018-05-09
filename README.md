@@ -73,6 +73,9 @@ Like it? Check more [examples](https://github.com/belyalov/tinyweb/tree/master/e
 #### class `webserver`
 Main tinyweb app class.
 
+* `__init__(self, request_timeout=3)` - Create instance of webserver class.
+    * `request_timeout` - Specifies timeout for client to send complete HTTP request (without HTTP body, if any). After that connection will be closed. It is worth to mention that due to *tiny* implementation actual timeout could be `request_timeout` * 2.
+
 * `add_route(self, url, f, **kwargs)` - Map `url` into function `f`. Additional keyword arguments are supported:
     * `methods` - List of allowed methods. Defaults to `['GET', 'POST']`
     * `save_headers` - Due to memory constrains you most likely want to minimze memory usage by saving only headers
