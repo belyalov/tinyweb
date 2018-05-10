@@ -112,6 +112,21 @@ Main tinyweb app class.
     * `loop_forever` - run `async.loop_forever()`. Set to `False` if you don't want `run` to be blocking call. Be sure to call `async.loop_forever()` by yourself.
     * `backlog` - size of pending connections queue (basically argument to `listen()` function)
 
+* `shutdown(self)` - gracefully shutdown web server. Meaning close all active connections / server socket and cancel all started coroutines. **NOTE** be sure to it in event loop or run event loop at least once, like:
+    ```python
+    async def all_shutdown():
+        await asyncio.sleep_ms(100)
+
+    try:
+        web = tinyweb.webserver()
+        web.run()
+    except KeyboardInterrupt as e:
+        print(' CTRL+C pressed - terminating...')
+        web.shutdown()
+        uasyncio.get_event_loop().run_until_complete(all_shutdown())
+    ```
+
+
 #### class `request`
 This class contains everything about *HTTP request*. Use it to get HTTP headers / query string / etc.
 ***Warning*** - to improve memory / CPU usage strings in `request` class are *binary strings*. This means that you **must** use `b` prefix when accessing items, e.g.

@@ -14,8 +14,6 @@ from tinyweb.server import get_file_mime_type, urldecode_plus, parse_query_strin
 from tinyweb.server import request, HTTPException
 
 
-# Helpers
-
 # HTTP headers helpers
 
 
@@ -52,6 +50,7 @@ class mockWriter():
         keyword arguments:
             generate_expection - raise exception when calling send()
         """
+        self.s = 1
         self.history = []
         self.closed = False
         self.generate_expection = generate_expection
@@ -73,6 +72,7 @@ async def mock_wait_for(coro, timeout):
 
 
 def run_coro(coro):
+    # Mock wait_for() function with simple dummy
     asyncio.wait_for = (lambda c, t: await c)
     """Simple helper to run coroutine"""
     for i in coro:
@@ -279,9 +279,14 @@ class ServerFull(unittest.TestCase):
     def setUp(self):
         self.dummy_called = False
         self.data = {}
+        # "Register" one connection into map for dedicated decor server
+        server_for_decorators.conns[id(1)] = None
         self.hello_world_history = ['HTTP/1.0 200 OK\r\n' +
                                     'Content-Type: text/html\r\n\r\n',
                                     '<html><h1>Hello world</h1></html>']
+        # Create one more server - to simplify bunch of tests
+        self.srv = webserver()
+        self.srv.conns[id(1)] = None
 
     def testDecorator(self):
         """Test @.route() decorator"""
@@ -302,6 +307,8 @@ class ServerFull(unittest.TestCase):
         rdr = mockReader(['GET /uid2/man2 HTTP/1.1\r\n',
                           HDRE])
         wrt = mockWriter()
+        # Re-register connection
+        server_for_decorators.conns[id(1)] = None
         # "Send" request
         run_coro(server_for_decorators._handler(rdr, wrt))
         # Ensure that proper response "sent"
@@ -329,28 +336,26 @@ class ServerFull(unittest.TestCase):
 
     def testStartHTML(self):
         """Verify that request.start_html() works well"""
-        srv = webserver()
-        srv.add_route('/', self.hello_world_handler)
+        self.srv.add_route('/', self.hello_world_handler)
         rdr = mockReader(['GET / HTTP/1.1\r\n',
                           HDR('Host: blah.com'),
                           HDRE])
         wrt = mockWriter()
         # "Send" request
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         # Ensure that proper response "sent"
         self.assertEqual(wrt.history, self.hello_world_history)
         self.assertTrue(wrt.closed)
 
     def testRedirect(self):
         """Verify that request.start_html() works well"""
-        srv = webserver()
-        srv.add_route('/', self.redirect_handler)
+        self.srv.add_route('/', self.redirect_handler)
         rdr = mockReader(['GET / HTTP/1.1\r\n',
                           HDR('Host: blah.com'),
                           HDRE])
         wrt = mockWriter()
         # "Send" request
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         # Ensure that proper response "sent"
         exp = ['HTTP/1.0 302 Found\r\n' +
                'Location: /blahblah\r\nContent-Length: 5\r\n\r\n',
@@ -359,84 +364,79 @@ class ServerFull(unittest.TestCase):
 
     def testRequestBodyUnknownType(self):
         """Unknow HTTP body test - empty dict expected"""
-        srv = webserver()
-        srv.add_route('/', self.dummy_post_handler, methods=['POST'])
+        self.srv.add_route('/', self.dummy_post_handler, methods=['POST'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Host: blah.com'),
                           HDR('Content-Length: 5'),
                           HDRE,
                           '12345'])
         wrt = mockWriter()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         # Check extracted POST body
         self.assertEqual(self.data, {})
 
     def testRequestBodyJson(self):
         """JSON encoded POST body"""
-        srv = webserver()
-        srv.add_route('/',
-                      self.dummy_post_handler,
-                      methods=['POST'],
-                      save_headers=['Content-Type', 'Content-Length'])
+        self.srv.add_route('/',
+                           self.dummy_post_handler,
+                           methods=['POST'],
+                           save_headers=['Content-Type', 'Content-Length'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/json'),
                           HDR('Content-Length: 10'),
                           HDRE,
                           '{"a": "b"}'])
         wrt = mockWriter()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         # Check parsed POST body
         self.assertEqual(self.data, {'a': 'b'})
 
     def testRequestBodyUrlencoded(self):
         """Regular HTML form"""
-        srv = webserver()
-        srv.add_route('/',
-                      self.dummy_post_handler,
-                      methods=['POST'],
-                      save_headers=['Content-Type', 'Content-Length'])
+        self.srv.add_route('/',
+                           self.dummy_post_handler,
+                           methods=['POST'],
+                           save_headers=['Content-Type', 'Content-Length'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/x-www-form-urlencoded; charset=UTF-8'),
                           HDR('Content-Length: 10'),
                           HDRE,
                           'a=b&c=%20d'])
         wrt = mockWriter()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         # Check parsed POST body
         self.assertEqual(self.data, {'a': 'b', 'c': ' d'})
 
     def testRequestBodyNegative(self):
         """Regular HTML form"""
-        srv = webserver()
-        srv.add_route('/',
-                      self.dummy_post_handler,
-                      methods=['POST'],
-                      save_headers=['Content-Type', 'Content-Length'])
+        self.srv.add_route('/',
+                           self.dummy_post_handler,
+                           methods=['POST'],
+                           save_headers=['Content-Type', 'Content-Length'])
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/json'),
                           HDR('Content-Length: 9'),
                           HDRE,
                           'some junk'])
         wrt = mockWriter()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         # payload broken - HTTP 400 expected
         self.assertEqual(wrt.history, ['HTTP/1.0 400 Bad Request\r\n\r\n'])
 
     def testRequestLargeBody(self):
         """Max Body size check"""
-        srv = webserver()
-        srv.add_route('/',
-                      self.dummy_post_handler,
-                      methods=['POST'],
-                      save_headers=['Content-Type', 'Content-Length'],
-                      max_body_size=5)
+        self.srv.add_route('/',
+                           self.dummy_post_handler,
+                           methods=['POST'],
+                           save_headers=['Content-Type', 'Content-Length'],
+                           max_body_size=5)
         rdr = mockReader(['POST / HTTP/1.1\r\n',
                           HDR('Content-Type: application/json'),
                           HDR('Content-Length: 9'),
                           HDRE,
                           'some junk'])
         wrt = mockWriter()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         # payload broken - HTTP 400 expected
         self.assertEqual(wrt.history, ['HTTP/1.0 413 Payload Too Large\r\n\r\n'])
 
@@ -446,14 +446,13 @@ class ServerFull(unittest.TestCase):
 
     def testRouteParameterized(self):
         """Verify that route with params works fine"""
-        srv = webserver()
-        srv.add_route('/db/<user_name>', self.route_parameterized_handler)
+        self.srv.add_route('/db/<user_name>', self.route_parameterized_handler)
         rdr = mockReader(['GET /db/user1 HTTP/1.1\r\n',
                           HDR('Host: junk.com'),
                           HDRE])
         wrt = mockWriter()
         # "Send" request
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         # Ensure that proper response "sent"
         expected = ['HTTP/1.0 200 OK\r\n' +
                     'Content-Type: text/html\r\n\r\n',
@@ -463,8 +462,7 @@ class ServerFull(unittest.TestCase):
 
     def testParseHeadersOnOff(self):
         """Verify parameter parse_headers works"""
-        srv = webserver()
-        srv.add_route('/', self.dummy_handler, save_headers=['H1', 'H2'])
+        self.srv.add_route('/', self.dummy_handler, save_headers=['H1', 'H2'])
         rdr = mockReader(['GET / HTTP/1.1\r\n',
                           HDR('H1: blah.com'),
                           HDR('H2: lalalla'),
@@ -472,7 +470,7 @@ class ServerFull(unittest.TestCase):
                           HDRE])
         # "Send" request
         wrt = mockWriter()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         self.assertTrue(self.dummy_called)
         # Check for headers - only 2 of 3 should be collected, others - ignore
         hdrs = {b'H1': b'blah.com',
@@ -482,23 +480,23 @@ class ServerFull(unittest.TestCase):
 
     def testDisallowedMethod(self):
         """Verify that server respects allowed methods"""
-        srv = webserver()
-        srv.add_route('/', self.hello_world_handler)
-        srv.add_route('/post_only', self.dummy_handler, methods=['POST'])
+        self.srv.add_route('/', self.hello_world_handler)
+        self.srv.add_route('/post_only', self.dummy_handler, methods=['POST'])
         rdr = mockReader(['GET / HTTP/1.0\r\n',
                           HDRE])
         # "Send" GET request, by default GET is enabled
         wrt = mockWriter()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         self.assertEqual(wrt.history, self.hello_world_history)
         self.assertTrue(wrt.closed)
 
         # "Send" GET request to POST only location
+        self.srv.conns[id(1)] = None
         self.dummy_called = False
         rdr = mockReader(['GET /post_only HTTP/1.1\r\n',
                           HDRE])
         wrt = mockWriter()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         # Hanlder should not be called - method not allowed
         self.assertFalse(self.dummy_called)
         exp = ['HTTP/1.0 405 Method Not Allowed\r\n\r\n']
@@ -508,13 +506,12 @@ class ServerFull(unittest.TestCase):
 
     def testAutoOptionsMethod(self):
         """Test auto implementation of OPTIONS method"""
-        srv = webserver()
-        srv.add_route('/', self.hello_world_handler, methods=['POST', 'PUT', 'DELETE'])
-        srv.add_route('/disabled', self.hello_world_handler, auto_method_options=False)
+        self.srv.add_route('/', self.hello_world_handler, methods=['POST', 'PUT', 'DELETE'])
+        self.srv.add_route('/disabled', self.hello_world_handler, auto_method_options=False)
         rdr = mockReader(['OPTIONS / HTTP/1.0\r\n',
                           HDRE])
         wrt = mockWriter()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
 
         exp = ['HTTP/1.0 200 OK\r\n' +
                'Access-Control-Allow-Headers: *\r\n'
@@ -530,8 +527,7 @@ class ServerFull(unittest.TestCase):
                           HDR('Host: blah.com'),
                           HDRE])
         wrt = mockWriter()
-        srv = webserver()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 404 Not Found\r\n' +
                'Content-Length: 14\r\n\r\n',
                'Page Not Found']
@@ -545,8 +541,7 @@ class ServerFull(unittest.TestCase):
                           HDR('Host: blah.com'),
                           HDRE])
         wrt = mockWriter()
-        srv = webserver()
-        run_coro(srv._handler(rdr, wrt))
+        run_coro(self.srv._handler(rdr, wrt))
         exp = ['HTTP/1.0 400 Bad Request\r\n\r\n']
         self.assertEqual(wrt.history, exp)
         # Connection must be closed
@@ -596,6 +591,7 @@ class ServerResource(unittest.TestCase):
 
     def setUp(self):
         self.srv = webserver()
+        self.srv.conns[id(1)] = None
         self.srv.add_resource(ResourceGetPost, '/')
         self.srv.add_resource(ResourceGetParam, '/param/<user_id>')
         self.srv.add_resource(ResourceGetArgs, '/args', arg1=1, arg2=2)
@@ -702,6 +698,7 @@ class StaticContent(unittest.TestCase):
 
     def setUp(self):
         self.srv = webserver()
+        self.srv.conns[id(1)] = None
         self.tempfn = '__tmp.html'
         self.ctype = None
         self.etype = None

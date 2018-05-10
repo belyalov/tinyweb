@@ -9,6 +9,7 @@ import gc
 import uos as os
 import sys
 import uerrno as errno
+import usocket as socket
 
 
 def urldecode_plus(s):
@@ -384,6 +385,7 @@ class webserver:
         self.request_timeout = request_timeout
         self.explicit_url_map = {}
         self.parameterized_url_map = {}
+        self.conns = {}
 
     def _find_url_handler(self, req):
         """Helper to find URL handler.
@@ -449,7 +451,7 @@ class webserver:
             else:
                 await handler(req, resp)
             # Done here
-        except asyncio.TimeoutError:
+        except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
         except OSError as e:
             # Do not send response for connection related errors - too late :)
@@ -474,6 +476,8 @@ class webserver:
                 pass
         finally:
             await writer.aclose()
+            # Using conn socket as key
+            del self.conns[id(writer.s)]
 
     def add_route(self, url, f, **kwargs):
         """Add URL to function mapping.
@@ -566,7 +570,35 @@ class webserver:
             return f
         return _route
 
-    def run(self, host="127.0.0.1", port=8081, loop_forever=True, backlog=10):
+    async def _tcp_server(self, host, port, backlog):
+        """TCP Server implementation.
+        Opens socket for accepting connection and
+        creates task for every new accepted connection
+        """
+        addr = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0][-1]
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setblocking(False)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(addr)
+        sock.listen(backlog)
+        try:
+            while True:
+                yield asyncio.IORead(sock)
+                csock, caddr = sock.accept()
+                csock.setblocking(False)
+                # Start handler / keep it in the map - to be able to
+                # shutdown gracefully - by close all connections
+                hid = id(csock)
+                handler = self._handler(asyncio.StreamReader(csock),
+                                        asyncio.StreamWriter(csock, {}))
+                self.conns[hid] = handler
+                self.loop.create_task(handler)
+        except asyncio.CancelledError:
+            return
+        finally:
+            sock.close()
+
+    def run(self, host="127.0.0.1", port=8081, loop=None, loop_forever=True, backlog=16):
         """Run Web Server. By default it runs forever.
 
         Keyword arguments:
@@ -575,9 +607,18 @@ class webserver:
             loop_forever - run async.loop_forever(). Defaults to True
             backlog - size of pending connections queue. Defaults to 10
         """
-        loop = asyncio.get_event_loop()
+        if loop:
+            self.loop = loop
+        else:
+            self.loop = asyncio.get_event_loop()
         print("* Starting Web Server at {}:{}".format(host, port))
-        loop.create_task(asyncio.start_server(self._handler, host, port, backlog=backlog))
+        self._server_coro = self._tcp_server(host, port, backlog)
+        self.loop.create_task(self._server_coro)
         if loop_forever:
-            loop.run_forever()
-            loop.close()
+            self.loop.run_forever()
+
+    def shutdown(self):
+        """Gracefully shutdown Web Server"""
+        asyncio.cancel(self._server_coro)
+        for hid, coro in self.conns.items():
+            asyncio.cancel(coro)
