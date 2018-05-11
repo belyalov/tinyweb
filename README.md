@@ -73,8 +73,9 @@ Like it? Check more [examples](https://github.com/belyalov/tinyweb/tree/master/e
 #### class `webserver`
 Main tinyweb app class.
 
-* `__init__(self, request_timeout=3)` - Create instance of webserver class.
-    * `request_timeout` - Specifies timeout for client to send complete HTTP request (without HTTP body, if any). After that connection will be closed. It is worth to mention that due to *tiny* implementation actual timeout could be `request_timeout` * 2.
+* `__init__(self, request_timeout=3, max_concurrency=None)` - Create instance of webserver class.
+    * `request_timeout` - Specifies timeout for client to send complete HTTP request (without HTTP body, if any), after that connection will be closed.
+    * `max_concurrency` - How many connections can be processed concurrently. It is very important to limit it mostly because of memory constrain. Default value depends on platform, **3** for `esp8266`, **6** for `esp32` and **10** for others.
 
 * `add_route(self, url, f, **kwargs)` - Map `url` into function `f`. Additional keyword arguments are supported:
     * `methods` - List of allowed methods. Defaults to `['GET', 'POST']`

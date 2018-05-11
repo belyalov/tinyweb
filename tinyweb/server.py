@@ -377,10 +377,6 @@ class webserver:
         Keyword arguments:
             request_timeout - Time for client to send complete request
                               after that connection will be closed.
-                              Due to tiny implementation maximum timeout could
-                              be request_timeout * 2 - we'll be waiting first time
-                              for request line to be received and second time
-                              for headers
             max_concurrency - How many connections can be processed concurrently.
                               It is very important to limit this number because of
                               memory constrain.
@@ -397,6 +393,8 @@ class webserver:
                 self.max_concurrency = 6
             else:
                 self.max_concurrency = 10
+        else:
+            self.max_concurrency = max_concurrency
         self.backlog = backlog
         self.explicit_url_map = {}
         self.parameterized_url_map = {}
@@ -420,6 +418,19 @@ class webserver:
         # No handler found
         return (None, None)
 
+    async def _handle_request(self, req, resp):
+        await req.read_request_line()
+        # Find URL handler
+        req.handler, req.params = self._find_url_handler(req)
+        if not req.handler:
+            # No URL handler found - HTTP 404
+            raise HTTPException(404, 'Page Not Found')
+        # req.params = params
+        # req.handler = han
+        resp.params = req.params
+        # Read / parse headers
+        await req.read_headers(req.params['save_headers'])
+
     async def _handler(self, reader, writer):
         """Handler for TCP connection with
         HTTP/1.0 protocol implementation
@@ -427,22 +438,10 @@ class webserver:
         gc.collect()
 
         try:
-            # Read HTTP Request Line
             req = request(reader)
             resp = response(writer)
-            await asyncio.wait_for(req.read_request_line(),
-                                   self.request_timeout)
-
-            # Find URL handler
-            handler, params = self._find_url_handler(req)
-            if not handler:
-                # No URL handler found - HTTP 404
-                raise HTTPException(404, 'Page Not Found')
-            req.params = params
-            resp.params = params
-
-            # Read / parse headers
-            await asyncio.wait_for(req.read_headers(params['save_headers']),
+            # Read HTTP Request with timeout
+            await asyncio.wait_for(self._handle_request(req, resp),
                                    self.request_timeout)
 
             # OPTIONS method is handled automatically
@@ -457,15 +456,15 @@ class webserver:
                 return
 
             # Ensure that HTTP method is allowed for this path
-            if req.method not in params['methods']:
+            if req.method not in req.params['methods']:
                 raise HTTPException(405)
 
             # Handle URL
             gc.collect()
             if hasattr(req, '_param'):
-                await handler(req, resp, req._param)
+                await req.handler(req, resp, req._param)
             else:
-                await handler(req, resp)
+                await req.handler(req, resp)
             # Done here
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
