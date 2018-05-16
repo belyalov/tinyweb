@@ -74,7 +74,7 @@ Like it? Check more [examples](https://github.com/belyalov/tinyweb/tree/master/e
 Main tinyweb app class.
 
 * `__init__(self, request_timeout=3, max_concurrency=None)` - Create instance of webserver class.
-    * `request_timeout` - Specifies timeout for client to send complete HTTP request (without HTTP body, if any), after that connection will be closed.
+    * `request_timeout` - Specifies timeout for client to send complete HTTP request (without HTTP body, if any), after that connection will be closed. Since `uasyncio` has very short queue (about 42 items) *Avoid* using values > 5 to prevent events queue overflow.
     * `max_concurrency` - How many connections can be processed concurrently. It is very important to limit it mostly because of memory constrain. Default value depends on platform, **3** for `esp8266`, **6** for `esp32` and **10** for others.
 
 * `add_route(self, url, f, **kwargs)` - Map `url` into function `f`. Additional keyword arguments are supported:
