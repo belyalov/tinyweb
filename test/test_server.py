@@ -575,6 +575,14 @@ class ResourceGetArgs():
         return {'arg1': arg1, 'arg2': arg2}
 
 
+class ResourceGenerator():
+    """REST API with generator as result"""
+
+    async def get(self, data):
+        yield 'longlongchunkchunk1'
+        yield 'chunk2'
+
+
 class ResourceNegative():
     """To cover negative test cases"""
 
@@ -595,6 +603,7 @@ class ServerResource(unittest.TestCase):
         self.srv.add_resource(ResourceGetPost, '/')
         self.srv.add_resource(ResourceGetParam, '/param/<user_id>')
         self.srv.add_resource(ResourceGetArgs, '/args', arg1=1, arg2=2)
+        self.srv.add_resource(ResourceGenerator, '/gen')
         self.srv.add_resource(ResourceNegative, '/negative')
 
     def testOptions(self):
@@ -650,6 +659,22 @@ class ServerResource(unittest.TestCase):
                'Access-Control-Allow-Methods: GET\r\n'
                'Content-Type: application/json\r\n\r\n',
                '{"arg1": 1, "arg2": 2}']
+        self.assertEqual(wrt.history, exp)
+
+    def testGenerator(self):
+        rdr = mockReader(['GET /gen HTTP/1.0\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_coro(self.srv._handler(rdr, wrt))
+        exp = ['HTTP/1.0 200 OK\r\n' +
+               'Access-Control-Allow-Methods: GET\r\n' +
+               'Access-Control-Allow-Headers: *\r\n' +
+               'Content-Type: application/json\r\n' +
+               'Transfer-Encoding: chunked\r\n' +
+               'Access-Control-Allow-Origin: *\r\n\r\n',
+               '13\r\nlonglongchunkchunk1\r\n',
+               '6\r\nchunk2\r\n',
+               '0\r\n\r\n']
         self.assertEqual(wrt.history, exp)
 
     def testPost(self):

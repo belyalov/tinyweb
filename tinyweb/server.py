@@ -348,26 +348,39 @@ async def restful_resource_handler(req, resp, param=None):
     else:
         res = _handler(data, **_kwargs)
     gc.collect()
-    # Handler result could be a tuple or just single dictionary, e.g.:
+    # Handler result could be:
+    # 1. generator - in case of large payload
+    # 2. string - just string :)
+    # 2. dict - meaning client what tinyweb to convert it to JSON
+    # it can also return error code together with str / dict
     # res = {'blah': 'blah'}
     # res = {'blah': 'blah'}, 201
-    if type(res) == tuple:
-        resp.code = res[1]
-        res = res[0]
-    elif res is None:
-        raise Exception('Restful handler must return dict/str with optional error code')
-
-    # Send response
-    gc.collect()
-    if type(res) is dict:
-        res_str = json.dumps(res)
+    if isinstance(res, asyncio.type_gen):
+        # Result is generator, use chunked response
+        resp.add_header('Content-Type', 'application/json')
+        resp.add_header('Transfer-Encoding', 'chunked')
+        resp.add_access_control_headers()
+        await resp._send_headers()
+        # Drain gen
+        for chunk in res:
+            await resp.send('{:x}\r\n{}\r\n'.format(len(chunk), chunk))
+        await resp.send('0\r\n\r\n')
     else:
-        res_str = res
-    resp.add_header('Content-Type', 'application/json')
-    resp.add_header('Content-Length', str(len(res_str)))
-    resp.add_access_control_headers()
-    await resp._send_headers()
-    await resp.send(res_str)
+        if type(res) == tuple:
+            resp.code = res[1]
+            res = res[0]
+        elif res is None:
+            raise Exception('REST handler must return result with optional error code')
+        # Send response
+        if type(res) is dict:
+            res_str = json.dumps(res)
+        else:
+            res_str = res
+        resp.add_header('Content-Type', 'application/json')
+        resp.add_header('Content-Length', str(len(res_str)))
+        resp.add_access_control_headers()
+        await resp._send_headers()
+        await resp.send(res_str)
 
 
 class webserver:
