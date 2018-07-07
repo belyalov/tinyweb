@@ -76,6 +76,8 @@ Main tinyweb app class.
 * `__init__(self, request_timeout=3, max_concurrency=None)` - Create instance of webserver class.
     * `request_timeout` - Specifies timeout for client to send complete HTTP request (without HTTP body, if any), after that connection will be closed. Since `uasyncio` has very short queue (about 42 items) *Avoid* using values > 5 to prevent events queue overflow.
     * `max_concurrency` - How many connections can be processed concurrently. It is very important to limit it mostly because of memory constrain. Default value depends on platform, **3** for `esp8266`, **6** for `esp32` and **10** for others.
+    * `backlog` - Parameter to socket.listen() function. Defines size of pending to be accepted connections queue. Must be greater than `max_concurrency`.
+    * `debug` - Whether send exception info (text + backtrace) to client together with HTTP 500 or not.
 
 * `add_route(self, url, f, **kwargs)` - Map `url` into function `f`. Additional keyword arguments are supported:
     * `methods` - List of allowed methods. Defaults to `['GET', 'POST']`
@@ -86,13 +88,13 @@ Main tinyweb app class.
     * `allowed_access_control_headers` - Whenever you're using xmlHttpRequest (send JSON from browser) these headers are required to do access control. Defaults to `*`
     * `allowed_access_control_origins` - The same idea as for header above. Defaults to `*`.
 
-* `@route` - simple and useful decorator (inspired by *Flask*). Instead of using add_route() directly - just decorate your function with `@route`, like this:
+* `@route` - simple and useful decorator (inspired by *Flask*). Instead of using `add_route()` directly - just decorate your function with `@route`, like this:
     ```python
     @app.route('/index.html')
     async def index(req, resp):
         await resp.send_file('static/index.simple.html')
     ```
-* `add_resource(self, cls, url, **kwargs)` - RestAPI: Map resource class `cls` to `url`.  Class `cls` is arbitrary class with with implementation of HTTP methods:
+* `add_resource(self, cls, url, **kwargs)` - RestAPI: Map resource class `cls` to `url`. Class `cls` is arbitrary class with with implementation of HTTP methods:
     ```python
     class CustomersList():
         def get(self, data):

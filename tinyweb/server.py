@@ -385,7 +385,7 @@ async def restful_resource_handler(req, resp, param=None):
 
 class webserver:
 
-    def __init__(self, request_timeout=3, max_concurrency=None, backlog=16):
+    def __init__(self, request_timeout=3, max_concurrency=None, backlog=16, debug=False):
         """Tiny Web Server class.
         Keyword arguments:
             request_timeout - Time for client to send complete request
@@ -397,6 +397,8 @@ class webserver:
             backlog         - Parameter to socket.listen() function. Defines size of
                               pending to be accepted connections queue.
                               Must be greater than max_concurrency
+            debug           - Whether send exception info (text + backtrace)
+                              to client together with HTTP 500 or not.
         """
         self.request_timeout = request_timeout
         if not max_concurrency:
@@ -409,6 +411,7 @@ class webserver:
         else:
             self.max_concurrency = max_concurrency
         self.backlog = backlog
+        self.debug = debug
         self.explicit_url_map = {}
         self.parameterized_url_map = {}
         # Currently opened connections
@@ -500,6 +503,9 @@ class webserver:
             sys.print_exception(e)
             try:
                 await resp.error(500)
+                # Send exception info if desired
+                if self.debug:
+                    sys.print_exception(e, resp.writer.s)
             except Exception as e:
                 pass
         finally:
