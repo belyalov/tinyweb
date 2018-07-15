@@ -17,6 +17,7 @@ install:
   - export MDST=~/.micropython/lib/
   - mkdir -p $MDST
   - ln -s `pwd`/micropython-lib/unittest/unittest.py $MDST
+  - ln -s `pwd`/micropython-lib/logging/logging.py $MDST
   - ln -s ../../uasyncio.core/uasyncio/core.py `pwd`/micropython-lib/uasyncio/uasyncio
   - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MDST/uasyncio
   - ln -s `pwd`/tinyweb $MDST/tinyweb

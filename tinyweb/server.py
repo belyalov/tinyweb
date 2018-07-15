@@ -3,6 +3,7 @@ Tiny Web - pretty simple and powerful web server for tiny platforms like ESP8266
 MIT license
 (C) Konstantin Belyalov 2017-2018
 """
+import logging
 import uasyncio as asyncio
 import ujson as json
 import gc
@@ -10,6 +11,9 @@ import uos as os
 import sys
 import uerrno as errno
 import usocket as socket
+
+
+log = logging.getLogger('TINYWEB')
 
 
 def urldecode_plus(s):
@@ -491,16 +495,15 @@ class webserver:
                 try:
                     await resp.error(500)
                 except Exception as e:
-                    sys.print_exception(e)
+                    sys.print_exception(e, logging._stream)
         except HTTPException as e:
             try:
                 await resp.error(e.code, e.message)
             except Exception as e:
-                sys.print_exception(e)
+                sys.print_exception(e, logging._stream)
         except Exception as e:
-            print('-' * 40)
-            print('Unhandled exception in "{}"'.format(req.path.decode()))
-            sys.print_exception(e)
+            log.error('Unhandled exception at "{}"'.format(req.path.decode()))
+            sys.print_exception(e, logging._stream)
             try:
                 await resp.error(500)
                 # Send exception info if desired
@@ -652,12 +655,13 @@ class webserver:
             loop_forever - run loo.loop_forever(), otherwise caller must run it by itself.
         """
         if backlog:
-            print("WARNING: 'backlog' has been moved to __init__() and will be removed in next release")
+            log.warning("DEPRECATED: 'backlog' has been moved to __init__()")
+            self.backlog = backlog
         if loop:
             self.loop = loop
         else:
             self.loop = asyncio.get_event_loop()
-        print("* Starting Web Server at {}:{}".format(host, port))
+        log.debug("* Starting Web Server at {}:{}".format(host, port))
         self._server_coro = self._tcp_server(host, port, self.backlog)
         self.loop.create_task(self._server_coro)
         if loop_forever:

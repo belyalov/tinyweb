@@ -13,6 +13,7 @@ By itself - *tinyweb* is just simple TCP server which runs in top of **uasyncio*
 ### Requirements
 * [uasyncio](https://github.com/micropython/micropython-lib/tree/master/uasyncio) - micropython version of *async* library for big brother - python3.
 * [uasyncio-core](https://github.com/micropython/micropython-lib/tree/master/uasyncio.core)
+* [logging](https://github.com/micropython/micropython-lib/tree/master/logging)
 
 ### Quickstart
 Tinyweb comes as a compiled firmware for ESP8266 / ESP32 as well ("frozen modules"). You don't have to use it - however, it could be easiest way to try it :)
