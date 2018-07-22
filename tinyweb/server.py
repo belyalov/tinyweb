@@ -13,7 +13,7 @@ import uerrno as errno
 import usocket as socket
 
 
-log = logging.getLogger('TINYWEB')
+log = logging.getLogger('WEB')
 
 
 def urldecode_plus(s):
@@ -50,34 +50,11 @@ def parse_query_string(s):
     return res
 
 
-def get_file_mime_type(fname):
-    """Get MIME type by filename extension.
-
-    Returns string
-    """
-    mime_types = {'.html': 'text/html',
-                  '.css': 'text/css',
-                  '.js': 'application/javascript',
-                  '.png': 'image/png',
-                  '.jpg': 'image/jpeg',
-                  '.jpeg': 'image/jpeg',
-                  '.gif': 'image/gif'}
-    idx = fname.rfind('.')
-    if idx == -1:
-        return 'text/plain'
-    ext = fname[idx:]
-    if ext not in mime_types:
-        return 'text/plain'
-    else:
-        return mime_types[ext]
-
-
 class HTTPException(Exception):
     """HTTP protocol exceptions"""
 
-    def __init__(self, code=400, message=None):
+    def __init__(self, code=400):
         self.code = code
-        self.message = message
 
 
 class request:
@@ -178,16 +155,6 @@ class response:
         self.send = _writer.awrite
         self.code = 200
         self.headers = {}
-        self.http_status_codes = {200: 'OK',
-                                  201: 'Created',
-                                  302: 'Found',
-                                  304: 'Not Modified',
-                                  400: 'Bad Request',
-                                  403: 'Forbidden',
-                                  404: 'Not Found',
-                                  405: 'Method Not Allowed',
-                                  413: 'Payload Too Large',
-                                  500: 'Internal Server Error'}
 
     async def _send_headers(self):
         """Compose and send:
@@ -201,11 +168,7 @@ class response:
         So combining headers together and send them as single "packet".
         """
         # Request line
-        if self.code in self.http_status_codes:
-            msg = self.http_status_codes[self.code]
-            hdrs = 'HTTP/1.0 {} {}\r\n'.format(self.code, msg)
-        else:
-            hdrs = 'HTTP/1.0 {} NA\r\n'.format(self.code)
+        hdrs = 'HTTP/1.0 {} MSG\r\n'.format(self.code)
         # Headers
         for k, v in self.headers.items():
             hdrs += '{}: {}\r\n'.format(k, v)
@@ -309,9 +272,8 @@ class response:
             slen = str(stat[6])
             self.add_header('Content-Length', slen)
             # Find content type
-            if not content_type:
-                content_type = get_file_mime_type(filename)
-            self.add_header('Content-Type', content_type)
+            if content_type:
+                self.add_header('Content-Type', content_type)
             # Add content-encoding, if any
             if content_encoding:
                 self.add_header('Content-Encoding', content_encoding)
@@ -321,6 +283,7 @@ class response:
             self.add_header('Cache-Control', 'max-age={}, public'.format(max_age))
             with open(filename) as f:
                 await self._send_headers()
+                gc.collect()
                 buf = bytearray(128)
                 while True:
                     size = f.readinto(buf)
@@ -330,7 +293,7 @@ class response:
         except OSError as e:
             # special handling for ENOENT / EACCESS
             if e.args[0] in (errno.ENOENT, errno.EACCES):
-                raise HTTPException(404, 'File Not Found')
+                raise HTTPException(404)
             else:
                 raise
 
@@ -365,16 +328,19 @@ async def restful_resource_handler(req, resp, param=None):
         resp.add_header('Transfer-Encoding', 'chunked')
         resp.add_access_control_headers()
         await resp._send_headers()
-        # Drain gen
+        # Drain generator
         for chunk in res:
-            await resp.send('{:x}\r\n{}\r\n'.format(len(chunk), chunk))
+            await resp.send('{:x}\r\n'.format(len(chunk)))
+            await resp.send(chunk)
+            await resp.send('\r\n')
+            gc.collect()
         await resp.send('0\r\n\r\n')
     else:
         if type(res) == tuple:
             resp.code = res[1]
             res = res[0]
         elif res is None:
-            raise Exception('REST handler must return result with optional error code')
+            raise Exception('Result expected')
         # Send response
         if type(res) is dict:
             res_str = json.dumps(res)
@@ -389,7 +355,7 @@ async def restful_resource_handler(req, resp, param=None):
 
 class webserver:
 
-    def __init__(self, request_timeout=3, max_concurrency=None, backlog=16, debug=False):
+    def __init__(self, request_timeout=3, max_concurrency=3, backlog=16, debug=False):
         """Tiny Web Server class.
         Keyword arguments:
             request_timeout - Time for client to send complete request
@@ -405,15 +371,7 @@ class webserver:
                               to client together with HTTP 500 or not.
         """
         self.request_timeout = request_timeout
-        if not max_concurrency:
-            if sys.platform == 'esp8266':
-                self.max_concurrency = 3
-            elif sys.platform == 'esp32':
-                self.max_concurrency = 6
-            else:
-                self.max_concurrency = 10
-        else:
-            self.max_concurrency = max_concurrency
+        self.max_concurrency = max_concurrency
         self.backlog = backlog
         self.debug = debug
         self.explicit_url_map = {}
@@ -444,7 +402,7 @@ class webserver:
         req.handler, req.params = self._find_url_handler(req)
         if not req.handler:
             # No URL handler found - HTTP 404
-            raise HTTPException(404, 'Page Not Found')
+            raise HTTPException(404)
         # req.params = params
         # req.handler = han
         resp.params = req.params
@@ -495,15 +453,16 @@ class webserver:
                 try:
                     await resp.error(500)
                 except Exception as e:
-                    sys.print_exception(e, logging._stream)
+                    log.exc(e, "")
         except HTTPException as e:
             try:
-                await resp.error(e.code, e.message)
+                await resp.error(e.code)
             except Exception as e:
-                sys.print_exception(e, logging._stream)
+                log.exc(e)
         except Exception as e:
-            log.error('Unhandled exception at "{}"'.format(req.path.decode()))
-            sys.print_exception(e, logging._stream)
+            # Unhandled expection in user's method
+            log.error(req.path.decode())
+            log.exc(e, "")
             try:
                 await resp.error(500)
                 # Send exception info if desired
@@ -555,12 +514,12 @@ class webserver:
             idx += 1
             param = url[idx:-1]
             if path.encode() in self.parameterized_url_map:
-                raise ValueError('URL already exists')
+                raise ValueError('URL exists')
             params['_param_name'] = param
             self.parameterized_url_map[path.encode()] = (f, params)
 
         if url.encode() in self.explicit_url_map:
-            raise ValueError('URL already exists')
+            raise ValueError('URL exists')
         self.explicit_url_map[url.encode()] = (f, params)
 
     def add_resource(self, cls, url, **kwargs):
@@ -646,7 +605,7 @@ class webserver:
         finally:
             sock.close()
 
-    def run(self, host="127.0.0.1", port=8081, loop=None, loop_forever=True, backlog=None):
+    def run(self, host="127.0.0.1", port=8081, loop=None, loop_forever=True,):
         """Run Web Server. By default it runs forever.
 
         Keyword arguments:
@@ -654,14 +613,10 @@ class webserver:
             port - port to listen on. By default - 8081
             loop_forever - run loo.loop_forever(), otherwise caller must run it by itself.
         """
-        if backlog:
-            log.warning("DEPRECATED: 'backlog' has been moved to __init__()")
-            self.backlog = backlog
         if loop:
             self.loop = loop
         else:
             self.loop = asyncio.get_event_loop()
-        log.debug("* Starting Web Server at {}:{}".format(host, port))
         self._server_coro = self._tcp_server(host, port, self.backlog)
         self.loop.create_task(self._server_coro)
         if loop_forever:

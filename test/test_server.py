@@ -10,7 +10,7 @@ import uos as os
 import uerrno as errno
 import uasyncio as asyncio
 from tinyweb import webserver
-from tinyweb.server import get_file_mime_type, urldecode_plus, parse_query_string
+from tinyweb.server import urldecode_plus, parse_query_string
 from tinyweb.server import request, HTTPException
 
 
@@ -82,15 +82,6 @@ def run_coro(coro):
 # Tests
 
 class Utils(unittest.TestCase):
-
-    def testMimeTypes(self):
-        self.assertEqual(get_file_mime_type('a.html'), 'text/html')
-        self.assertEqual(get_file_mime_type('a.gif'), 'image/gif')
-
-    def testMimeTypesUnknown(self):
-        runs = ['', '.', 'bbb', 'bbb.bbbb', '/', ' ']
-        for r in runs:
-            self.assertEqual('text/plain', get_file_mime_type(r))
 
     def testUrldecode(self):
         runs = [('abc%20def', 'abc def'),
@@ -281,7 +272,7 @@ class ServerFull(unittest.TestCase):
         self.data = {}
         # "Register" one connection into map for dedicated decor server
         server_for_decorators.conns[id(1)] = None
-        self.hello_world_history = ['HTTP/1.0 200 OK\r\n' +
+        self.hello_world_history = ['HTTP/1.0 200 MSG\r\n' +
                                     'Content-Type: text/html\r\n\r\n',
                                     '<html><h1>Hello world</h1></html>']
         # Create one more server - to simplify bunch of tests
@@ -297,7 +288,7 @@ class ServerFull(unittest.TestCase):
         # "Send" request
         run_coro(server_for_decorators._handler(rdr, wrt))
         # Ensure that proper response "sent"
-        expected = ['HTTP/1.0 200 OK\r\n' +
+        expected = ['HTTP/1.0 200 MSG\r\n' +
                     'Content-Type: text/html\r\n\r\n',
                     'YO, man1']
         self.assertEqual(wrt.history, expected)
@@ -312,7 +303,7 @@ class ServerFull(unittest.TestCase):
         # "Send" request
         run_coro(server_for_decorators._handler(rdr, wrt))
         # Ensure that proper response "sent"
-        expected = ['HTTP/1.0 200 OK\r\n' +
+        expected = ['HTTP/1.0 200 MSG\r\n' +
                     'Content-Type: text/html\r\n\r\n',
                     'YO, man2']
         self.assertEqual(wrt.history, expected)
@@ -357,7 +348,7 @@ class ServerFull(unittest.TestCase):
         # "Send" request
         run_coro(self.srv._handler(rdr, wrt))
         # Ensure that proper response "sent"
-        exp = ['HTTP/1.0 302 Found\r\n' +
+        exp = ['HTTP/1.0 302 MSG\r\n' +
                'Location: /blahblah\r\nContent-Length: 5\r\n\r\n',
                'msg:)']
         self.assertEqual(wrt.history, exp)
@@ -421,7 +412,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
         # payload broken - HTTP 400 expected
-        self.assertEqual(wrt.history, ['HTTP/1.0 400 Bad Request\r\n\r\n'])
+        self.assertEqual(wrt.history, ['HTTP/1.0 400 MSG\r\n\r\n'])
 
     def testRequestLargeBody(self):
         """Max Body size check"""
@@ -438,7 +429,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
         # payload broken - HTTP 400 expected
-        self.assertEqual(wrt.history, ['HTTP/1.0 413 Payload Too Large\r\n\r\n'])
+        self.assertEqual(wrt.history, ['HTTP/1.0 413 MSG\r\n\r\n'])
 
     async def route_parameterized_handler(self, req, resp, user_name):
         await resp.start_html()
@@ -454,7 +445,7 @@ class ServerFull(unittest.TestCase):
         # "Send" request
         run_coro(self.srv._handler(rdr, wrt))
         # Ensure that proper response "sent"
-        expected = ['HTTP/1.0 200 OK\r\n' +
+        expected = ['HTTP/1.0 200 MSG\r\n' +
                     'Content-Type: text/html\r\n\r\n',
                     '<html>Hello, user1</html>']
         self.assertEqual(wrt.history, expected)
@@ -499,7 +490,7 @@ class ServerFull(unittest.TestCase):
         run_coro(self.srv._handler(rdr, wrt))
         # Hanlder should not be called - method not allowed
         self.assertFalse(self.dummy_called)
-        exp = ['HTTP/1.0 405 Method Not Allowed\r\n\r\n']
+        exp = ['HTTP/1.0 405 MSG\r\n\r\n']
         self.assertEqual(wrt.history, exp)
         # Connection must be closed
         self.assertTrue(wrt.closed)
@@ -513,7 +504,7 @@ class ServerFull(unittest.TestCase):
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
 
-        exp = ['HTTP/1.0 200 OK\r\n' +
+        exp = ['HTTP/1.0 200 MSG\r\n' +
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 0\r\n'
                'Access-Control-Allow-Origin: *\r\n'
@@ -528,9 +519,7 @@ class ServerFull(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 404 Not Found\r\n' +
-               'Content-Length: 14\r\n\r\n',
-               'Page Not Found']
+        exp = ['HTTP/1.0 404 MSG\r\n\r\n']
         self.assertEqual(wrt.history, exp)
         # Connection must be closed
         self.assertTrue(wrt.closed)
@@ -542,7 +531,7 @@ class ServerFull(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 400 Bad Request\r\n\r\n']
+        exp = ['HTTP/1.0 400 MSG\r\n\r\n']
         self.assertEqual(wrt.history, exp)
         # Connection must be closed
         self.assertTrue(wrt.closed)
@@ -612,7 +601,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n' +
+        exp = ['HTTP/1.0 200 MSG\r\n' +
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 0\r\n'
                'Access-Control-Allow-Origin: *\r\n'
@@ -624,7 +613,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n' +
+        exp = ['HTTP/1.0 200 MSG\r\n' +
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 17\r\n'
@@ -638,7 +627,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n' +
+        exp = ['HTTP/1.0 200 MSG\r\n' +
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 18\r\n'
@@ -652,7 +641,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n' +
+        exp = ['HTTP/1.0 200 MSG\r\n' +
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 22\r\n'
@@ -666,14 +655,18 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n' +
+        exp = ['HTTP/1.0 200 MSG\r\n' +
                'Access-Control-Allow-Methods: GET\r\n' +
                'Access-Control-Allow-Headers: *\r\n' +
                'Content-Type: application/json\r\n' +
                'Transfer-Encoding: chunked\r\n' +
                'Access-Control-Allow-Origin: *\r\n\r\n',
-               '13\r\nlonglongchunkchunk1\r\n',
-               '6\r\nchunk2\r\n',
+               '13\r\n',
+               'longlongchunkchunk1',
+               '\r\n',
+               '6\r\n',
+               'chunk2',
+               '\r\n',
                '0\r\n\r\n']
         self.assertEqual(wrt.history, exp)
 
@@ -686,7 +679,7 @@ class ServerResource(unittest.TestCase):
                           '{"body": "body1"}'])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 OK\r\n' +
+        exp = ['HTTP/1.0 200 MSG\r\n' +
                'Access-Control-Allow-Origin: *\r\n'
                'Access-Control-Allow-Headers: *\r\n'
                'Content-Length: 30\r\n'
@@ -700,7 +693,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 405 Method Not Allowed\r\n\r\n']
+        exp = ['HTTP/1.0 405 MSG\r\n\r\n']
         self.assertEqual(wrt.history, exp)
 
     def testException(self):
@@ -708,7 +701,7 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 500 Internal Server Error\r\n\r\n']
+        exp = ['HTTP/1.0 500 MSG\r\n\r\n']
         self.assertEqual(wrt.history, exp)
 
     def testBrokenPipe(self):
@@ -743,22 +736,6 @@ class StaticContent(unittest.TestCase):
                              content_encoding=self.etype,
                              max_age=self.max_age)
 
-    def testSendFileAutoMime(self):
-        """Verify send_file feature with auto mime type"""
-        self.srv.add_route('/', self.send_file_handler)
-        rdr = mockReader(['GET / HTTP/1.0\r\n',
-                          HDRE])
-        wrt = mockWriter()
-        run_coro(self.srv._handler(rdr, wrt))
-
-        exp = ['HTTP/1.0 200 OK\r\n' +
-               'Content-Type: text/html\r\n'
-               'Content-Length: 21\r\n'
-               'Cache-Control: max-age=2592000, public\r\n\r\n',
-               bytearray(b'someContent blah blah')]
-        self.assertEqual(wrt.history, exp)
-        self.assertTrue(wrt.closed)
-
     def testSendFileManual(self):
         """Verify send_file works great with manually defined parameters"""
         self.ctype = 'text/plain'
@@ -770,7 +747,7 @@ class StaticContent(unittest.TestCase):
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
 
-        exp = ['HTTP/1.0 200 OK\r\n' +
+        exp = ['HTTP/1.0 200 MSG\r\n' +
                'Cache-Control: max-age=100, public\r\n'
                'Content-Type: text/plain\r\n'
                'Content-Length: 21\r\n'
@@ -790,9 +767,7 @@ class StaticContent(unittest.TestCase):
         os.unlink(self.tempfn)
         run_coro(self.srv._handler(rdr, wrt))
 
-        exp = ['HTTP/1.0 404 Not Found\r\n' +
-               'Content-Length: 14\r\n\r\n',
-               'File Not Found']
+        exp = ['HTTP/1.0 404 MSG\r\n\r\n']
         self.assertEqual(wrt.history, exp)
         self.assertTrue(wrt.closed)
 

@@ -22,7 +22,8 @@ async def index(req, resp):
 @app.route('/images/<fn>')
 async def images(req, resp, fn):
     # Send picture. Filename - in parameter
-    await resp.send_file('static/images/{}'.format(fn))
+    await resp.send_file('static/images/{}'.format(fn),
+                         content_type='image/jpeg')
 
 
 if __name__ == '__main__':

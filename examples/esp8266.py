@@ -49,7 +49,8 @@ async def files_css(req, resp, fn):
 # Images
 @app.route('/images/<fn>')
 async def files_images(req, resp, fn):
-    await resp.send_file('static/images/{}'.format(fn))
+    await resp.send_file('static/images/{}'.format(fn),
+                         content_type='image/jpeg')
 
 
 # RESTAPI: System status
