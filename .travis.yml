@@ -36,14 +36,14 @@ script:
   - export MPORT=micropython/ports/esp8266/modules
   - ln -s `pwd`/tinyweb $MPORT/tinyweb
   - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MPORT/uasyncio
-  - docker run -v`pwd`/micropython:/micropython arsenicus/esp-open-sdk /bin/bash -c ". ~/.bashrc && cd /micropython/ports/esp8266 && make"
+  - docker run -v`pwd`/micropython:/micropython arsenicus/esp-open-sdk /bin/bash -c ". /.bashrc && cd /micropython/ports/esp8266 && make"
   - cp micropython/ports/esp8266/build/firmware-combined.bin ./firmware_esp8266-$TRAVIS_TAG.bin
   # Compile firmware for esp32
   - export MPORT=micropython/ports/esp32/modules
   - ln -s `pwd`/tinyweb $MPORT/tinyweb
   - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MPORT/uasyncio
   # Supported SDK for 1.9.4 is 3ede9f011b50999b0560683f9419538c066dd09e
-  - docker run -v`pwd`/micropython:/micropython arsenicus/esp32-open-sdk:3ede9f011b50999b0560683f9419538c066dd09e /bin/bash -c ". ~/.bashrc && cd /micropython/ports/esp32 && make"
+  - docker run -v`pwd`/micropython:/micropython arsenicus/esp32-open-sdk:3ede9f011b50999b0560683f9419538c066dd09e /bin/bash -c ". /.bashrc && cd /micropython/ports/esp32 && make"
   - cp micropython/ports/esp32/build/firmware.bin ./firmware_esp32-$TRAVIS_TAG.bin
 
 deploy:
