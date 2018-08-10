@@ -655,8 +655,9 @@ class ServerResource(unittest.TestCase):
                           HDRE])
         wrt = mockWriter()
         run_coro(self.srv._handler(rdr, wrt))
-        exp = ['HTTP/1.0 200 MSG\r\n' +
+        exp = ['HTTP/1.1 200 MSG\r\n' +
                'Access-Control-Allow-Methods: GET\r\n' +
+               'Connection: close\r\n' +
                'Access-Control-Allow-Headers: *\r\n' +
                'Content-Type: application/json\r\n' +
                'Transfer-Encoding: chunked\r\n' +

@@ -154,6 +154,7 @@ class response:
         self.writer = _writer
         self.send = _writer.awrite
         self.code = 200
+        self.version = '1.0'
         self.headers = {}
 
     async def _send_headers(self):
@@ -168,7 +169,7 @@ class response:
         So combining headers together and send them as single "packet".
         """
         # Request line
-        hdrs = 'HTTP/1.0 {} MSG\r\n'.format(self.code)
+        hdrs = 'HTTP/{} {} MSG\r\n'.format(self.version, self.code)
         # Headers
         for k, v in self.headers.items():
             hdrs += '{}: {}\r\n'.format(k, v)
@@ -324,6 +325,10 @@ async def restful_resource_handler(req, resp, param=None):
     # res = {'blah': 'blah'}, 201
     if isinstance(res, asyncio.type_gen):
         # Result is generator, use chunked response
+        # NOTICE: HTTP 1.0 by itself does not support chunked responses, so, making workaround:
+        # Response is HTTP/1.1 with Connection: close
+        resp.version = '1.1'
+        resp.add_header('Connection', 'close')
         resp.add_header('Content-Type', 'application/json')
         resp.add_header('Transfer-Encoding', 'chunked')
         resp.add_access_control_headers()

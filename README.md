@@ -67,7 +67,7 @@ Simple? Oh yeah!
 Like it? Check more [examples](https://github.com/belyalov/tinyweb/tree/master/examples) then :)
 
 ### Limitation / Known issues
-* HTTP protocol support - due to memory constrains only **HTTP/1.0** is supported. Support of HTTP/1.1 may be added when `esp8266` platform will be completely deprecated.
+* HTTP protocol support - due to memory constrains only **HTTP/1.0** is supported (with exception for REST API - it uses HTTP/1.1 with `Connection: close`). Support of HTTP/1.1 may be added when `esp8266` platform will be completely deprecated.
 * [esp8266: socket accept() does not always accept](https://github.com/micropython/micropython/issues/2490) - sometimes whenever you're opening connection simultaneously some of them will never be accepted. Therefore it is strongly recommended to pack all your data (like `css`, `js`) into single html page.
 
 ### Reference
@@ -155,6 +155,7 @@ So be sure to check twice your code which interacts with `request` class.
 Use this class to generate HTTP response. Please be noticed that `response` class is using *regular strings*, not binary strings as `request` class does.
 
 * `code` - HTTP response code. By default set to `200` which means OK, no error.
+* `version` - HTTP version. Defaults to `1.0`. Please be note - that only HTTP1.0 is internally supported by `tinyweb`. So if you changing it to `1.1` - be sure to support protocol by yourself.
 * `headers` - HTTP response headers dictionary (key / value pairs).
 * `add_header(self, key, value)` - Convenient way to add HTTP response header
     * `key` - Header name
