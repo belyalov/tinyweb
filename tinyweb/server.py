@@ -383,6 +383,8 @@ class webserver:
         self.parameterized_url_map = {}
         # Currently opened connections
         self.conns = {}
+        # Statistics
+        self.processed_connections = 0
 
     def _find_url_handler(self, req):
         """Helper to find URL handler.
@@ -593,6 +595,7 @@ class webserver:
                 csock.setblocking(False)
                 # Start handler / keep it in the map - to be able to
                 # shutdown gracefully - by close all connections
+                self.processed_connections += 1
                 hid = id(csock)
                 handler = self._handler(asyncio.StreamReader(csock),
                                         asyncio.StreamWriter(csock, {}))
