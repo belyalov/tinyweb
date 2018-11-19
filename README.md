@@ -59,6 +59,12 @@ async def images(req, resp, fn):
     # Send picture. Filename - in just a parameter
     await resp.send_file('images/{}'.format(fn))
 
+# Some REST API endpoint
+@app.resource('/user/<id>')
+def user(data, id):
+    return {'id': id, 'name': 'Foo', 'status': 'online'}
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80)
 ```
@@ -109,6 +115,22 @@ Main tinyweb app class.
     ```
   `**kwargs` are optional and will be passed to handler directly.
     **Note**: only `GET`, `POST`, `PUT` and `DELETE` methods are supported. Check [restapi full example](https://github.com/belyalov/tinyweb/blob/master/examples/rest_api.py) as well.
+
+* `@resource` - the same idea as for `route` but for resource:
+    ```python
+    # Regular version
+    @app.resource('/user/<id>')
+    def user(data, id):
+        return {'id': id, 'name': 'foo'}
+
+    # Generator based / different HTTP method
+    @app.resource('/user/<id>', method='POST')
+    async def user(data, id):
+        yield '{'
+        yield '"id": "{}",'.format(id)
+        yield '"name": "test",'
+        yield '}'
+    ```
 
 * `run(self, host="127.0.0.1", port=8081, loop_forever=True, backlog=10)` - run web server. Since *tinyweb* is fully async server by default it is blocking call assuming that you've added other tasks before.
     * `host` - host to listen on

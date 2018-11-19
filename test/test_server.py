@@ -254,7 +254,7 @@ class ServerParts(unittest.TestCase):
             srv.add_route('/duppp', 1)
 
 
-# We want to test decorator @server.route as well
+# We want to test decorators as well
 server_for_decorators = webserver()
 
 
@@ -263,6 +263,16 @@ server_for_decorators = webserver()
 async def route_for_decorator(req, resp, user_id):
     await resp.start_html()
     await resp.send('YO, {}'.format(user_id))
+
+
+@server_for_decorators.resource('/rest1/<user_id>')
+def resource_for_decorator1(data, user_id):
+    return {'name': user_id}
+
+
+@server_for_decorators.resource('/rest2/<user_id>')
+async def resource_for_decorator2(data, user_id):
+    yield '{"name": user_id}'
 
 
 class ServerFull(unittest.TestCase):
@@ -279,7 +289,7 @@ class ServerFull(unittest.TestCase):
         self.srv = webserver()
         self.srv.conns[id(1)] = None
 
-    def testDecorator(self):
+    def testRouteDecorator1(self):
         """Test @.route() decorator"""
         # First decorator
         rdr = mockReader(['GET /uid/man1 HTTP/1.1\r\n',
@@ -294,6 +304,7 @@ class ServerFull(unittest.TestCase):
         self.assertEqual(wrt.history, expected)
         self.assertTrue(wrt.closed)
 
+    def testRouteDecorator2(self):
         # Second decorator
         rdr = mockReader(['GET /uid2/man2 HTTP/1.1\r\n',
                           HDRE])
@@ -306,6 +317,42 @@ class ServerFull(unittest.TestCase):
         expected = ['HTTP/1.0 200 MSG\r\n' +
                     'Content-Type: text/html\r\n\r\n',
                     'YO, man2']
+        self.assertEqual(wrt.history, expected)
+        self.assertTrue(wrt.closed)
+
+    def testResourceDecorator1(self):
+        """Test @.resource() decorator"""
+        rdr = mockReader(['GET /rest1/man1 HTTP/1.1\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_coro(server_for_decorators._handler(rdr, wrt))
+        expected = ['HTTP/1.0 200 MSG\r\n'
+                    'Access-Control-Allow-Origin: *\r\n' +
+                    'Access-Control-Allow-Headers: *\r\n' +
+                    'Content-Length: 16\r\n' +
+                    'Access-Control-Allow-Methods: GET\r\n' +
+                    'Content-Type: application/json\r\n\r\n',
+                    '{"name": "man1"}']
+        self.assertEqual(wrt.history, expected)
+        self.assertTrue(wrt.closed)
+
+    def testResourceDecorator2(self):
+        rdr = mockReader(['GET /rest2/man2 HTTP/1.1\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        run_coro(server_for_decorators._handler(rdr, wrt))
+        expected = ['HTTP/1.1 200 MSG\r\n' +
+                    'Access-Control-Allow-Methods: GET\r\n' +
+                    'Connection: close\r\n' +
+                    'Access-Control-Allow-Headers: *\r\n' +
+                    'Content-Type: application/json\r\n' +
+                    'Transfer-Encoding: chunked\r\n' +
+                    'Access-Control-Allow-Origin: *\r\n\r\n',
+                    '11\r\n',
+                    '{"name": user_id}',
+                    '\r\n',
+                    '0\r\n\r\n'
+                    ]
         self.assertEqual(wrt.history, expected)
         self.assertTrue(wrt.closed)
 

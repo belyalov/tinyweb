@@ -577,6 +577,29 @@ class webserver:
             return f
         return _route
 
+    def resource(self, url, method='GET', **kwargs):
+        """Decorator for add_resource() method
+
+        Examples:
+            @app.resource('/users')
+            def users(data):
+                return {'a': 1}
+
+            @app.resource('/messages/<topic_id>')
+            async def index(data, topic_id):
+                yield '{'
+                yield '"topic_id": "{}",'.format(topic_id)
+                yield '"message": "test",'
+                yield '}'
+        """
+        def _resource(f):
+            self.add_route(url, restful_resource_handler,
+                           methods=[method],
+                           save_headers=['Content-Length', 'Content-Type'],
+                           _callmap={method.encode(): (f, kwargs)})
+            return f
+        return _resource
+
     async def _tcp_server(self, host, port, backlog):
         """TCP Server implementation.
         Opens socket for accepting connection and
