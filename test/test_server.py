@@ -14,9 +14,17 @@ from tinyweb.server import urldecode_plus, parse_query_string
 from tinyweb.server import request, HTTPException
 
 
+# Helper to delete file
+def delete_file(fn):
+    # "unlink" gets renamed to "remove" in micropython,
+    # so support both
+    if hasattr(os, 'unlink'):
+        os.unlink(fn)
+    else:
+        os.remove(fn)
+
+
 # HTTP headers helpers
-
-
 def HDR(str):
     return '{}\r\n'.format(str)
 
@@ -774,7 +782,7 @@ class StaticContent(unittest.TestCase):
 
     def tearDown(self):
         try:
-            os.unlink(self.tempfn)
+            delete_file(self.tempfn)
         except OSError:
             pass
 
@@ -812,7 +820,7 @@ class StaticContent(unittest.TestCase):
         wrt = mockWriter()
 
         # Intentionally delete file before request
-        os.unlink(self.tempfn)
+        delete_file(self.tempfn)
         run_coro(self.srv._handler(rdr, wrt))
 
         exp = ['HTTP/1.0 404 MSG\r\n\r\n']

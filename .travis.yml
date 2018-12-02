@@ -21,9 +21,11 @@ install:
   - ln -s ../../uasyncio.core/uasyncio/core.py `pwd`/micropython-lib/uasyncio/uasyncio
   - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MDST/uasyncio
   - ln -s `pwd`/tinyweb $MDST/tinyweb
-  # compile/install micropython. Use release v1.9.4
+  # compile/install micropython.
+  # Use commit "extmod/modlwip: Implement TCP listen/accept backlog"
+  # In order to support TCP listen/accept backlog
   - cd micropython
-  - git checkout v1.9.4
+  - git checkout 4737ff8054e84b3ccd1e7364d773a8c1d14095f5
   - sudo make -C ports/unix axtls install
   - cd ..
 
@@ -42,8 +44,8 @@ script:
   - export MPORT=micropython/ports/esp32/modules
   - ln -s `pwd`/tinyweb $MPORT/tinyweb
   - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MPORT/uasyncio
-  # Supported SDK for 1.9.4 is 3ede9f011b50999b0560683f9419538c066dd09e
-  - docker run -v`pwd`/micropython:/micropython arsenicus/esp32-open-sdk:3ede9f011b50999b0560683f9419538c066dd09e /bin/bash -c ". /.bashrc && cd /micropython/ports/esp32 && make"
+  # Supported ESP32 SDK
+  - docker run -v`pwd`/micropython:/micropython arsenicus/esp32-open-sdk:30545f4cccec7460634b656d278782dd7151098e /bin/bash -c ". /.bashrc && cd /micropython/ports/esp32 && make"
   - cp micropython/ports/esp32/build/firmware.bin ./firmware_esp32-$TRAVIS_TAG.bin
 
 deploy:
