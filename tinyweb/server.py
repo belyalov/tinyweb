@@ -375,6 +375,7 @@ class webserver:
             debug           - Whether send exception info (text + backtrace)
                               to client together with HTTP 500 or not.
         """
+        self.loop = asyncio.get_event_loop()
         self.request_timeout = request_timeout
         self.max_concurrency = max_concurrency
         self.backlog = backlog
@@ -644,7 +645,6 @@ class webserver:
             port - port to listen on. By default - 8081
             loop_forever - run loo.loop_forever(), otherwise caller must run it by itself.
         """
-        self.loop = asyncio.get_event_loop()
         self._server_coro = self._tcp_server(host, port, self.backlog)
         self.loop.create_task(self._server_coro)
         if loop_forever:
