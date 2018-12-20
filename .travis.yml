@@ -13,19 +13,18 @@ install:
   # clone micropython, belyalov's fork of micropython-lib
   - git clone --recurse-submodules https://github.com/micropython/micropython.git
   - git clone https://github.com/belyalov/micropython-lib.git
+  # merge required uasyncio modules
+  - cp micropython-lib/uasyncio.core/uasyncio/core.py micropython-lib/uasyncio/uasyncio/core.py
   # make symlinks to required modules
   - export MDST=~/.micropython/lib/
   - mkdir -p $MDST
   - ln -s `pwd`/micropython-lib/unittest/unittest.py $MDST
   - ln -s `pwd`/micropython-lib/logging/logging.py $MDST
-  - ln -s ../../uasyncio.core/uasyncio/core.py `pwd`/micropython-lib/uasyncio/uasyncio
   - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MDST/uasyncio
   - ln -s `pwd`/tinyweb $MDST/tinyweb
   # compile/install micropython.
-  # Use commit "extmod/modlwip: Implement TCP listen/accept backlog"
-  # In order to support TCP listen/accept backlog
   - cd micropython
-  - git checkout 4737ff8054e84b3ccd1e7364d773a8c1d14095f5
+  - git checkout 39eef270831323b77445e0458c9357d38e23658a
   - sudo make -C ports/unix axtls install
   - cd ..
 
@@ -36,14 +35,16 @@ script:
   - ./test/test_server.py
   # Copy modules to be frozen and compile firmware for esp8266
   - export MPORT=micropython/ports/esp8266/modules
-  - ln -s `pwd`/tinyweb $MPORT/tinyweb
-  - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MPORT/uasyncio
+  - cp -r tinyweb $MPORT
+  - cp -r micropython-lib/uasyncio/uasyncio $MPORT
+  - cp micropython-lib/logging/logging.py $MPORT
   - docker run -v`pwd`/micropython:/micropython arsenicus/esp-open-sdk /bin/bash -c ". /.bashrc && cd /micropython/ports/esp8266 && make"
   - cp micropython/ports/esp8266/build/firmware-combined.bin ./firmware_esp8266-$TRAVIS_TAG.bin
   # Compile firmware for esp32
   - export MPORT=micropython/ports/esp32/modules
-  - ln -s `pwd`/tinyweb $MPORT/tinyweb
-  - ln -s `pwd`/micropython-lib/uasyncio/uasyncio $MPORT/uasyncio
+  - cp -r tinyweb $MPORT
+  - cp -r micropython-lib/uasyncio/uasyncio $MPORT
+  - cp micropython-lib/logging/logging.py $MPORT
   # Supported ESP32 SDK
   - docker run -v`pwd`/micropython:/micropython arsenicus/esp32-open-sdk:30545f4cccec7460634b656d278782dd7151098e /bin/bash -c ". /.bashrc && cd /micropython/ports/esp32 && make"
   - cp micropython/ports/esp32/build/firmware.bin ./firmware_esp32-$TRAVIS_TAG.bin

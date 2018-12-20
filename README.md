@@ -21,16 +21,16 @@ Instructions below are tested with *NodeMCU* devices. For your device instructio
 **CAUTION**: If you proceed with installation all data on your device will **lost**!
 
 #### Installation - ESP8266
-* Download latest `firmware_esp8266.bin` from [releases](https://github.com/belyalov/tinyweb/releases).
+* Download latest `firmware_esp8266-version.bin` from [releases](https://github.com/belyalov/tinyweb/releases).
 * Install `esp-tool` if you haven't done already: `pip install esptool`
-* Erase flash: `esptool.py --port <UART PORT> --baud 115200 erase_flash`
-* Flash firmware: `esptool.py --port <UART PORT> --baud 115200 write_flash -fm dio 0 firmware_esp8266.bin`
+* Erase flash: `esptool.py --port <UART PORT> --baud 256000 erase_flash`
+* Flash firmware: `esptool.py --port <UART PORT> --baud 256000 write_flash -fm dio 0 firmware_esp8266-v1.3.2.bin`
 
 #### Installation - ESP32
-* Download latest `firmware_esp32.bin` from [releases](https://github.com/belyalov/tinyweb/releases).
+* Download latest `firmware_esp32-version.bin` from [releases](https://github.com/belyalov/tinyweb/releases).
 * Install `esp-tool` if you haven't done already: `pip install esptool`
-* Erase flash: `esptool.py --port <UART PORT> --baud 115200 erase_flash`
-* Flash firmware: `esptool.py --port <UART PORT> --baud 115200 write_flash -fm dio 0x1000 firmware_esp32.bin`
+* Erase flash: `esptool.py --port <UART PORT> --baud 256000 erase_flash`
+* Flash firmware: `esptool.py --port <UART PORT> --baud 256000 write_flash -fm dio 0x1000 firmware_esp32-v1.3.2.bin`
 
 #### Hello world
 Let's develop pretty simple static web application:
