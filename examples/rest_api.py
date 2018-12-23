@@ -12,7 +12,7 @@ next_id = 3
 
 
 # If you're familiar with FLaskRestful - you're almost all set! :)
-# Tinyweb have only basic functonality comparing to Flask due to
+# Tinyweb have only basic functionality comparing to Flask due to
 # environment where it intended to run on.
 class CustomersList():
 
@@ -62,13 +62,17 @@ class Customer():
         return {'message': 'successfully deleted'}
 
 
-if __name__ == '__main__':
+def run():
     # Create web server application
     app = tinyweb.webserver()
     # Add our resources
     app.add_resource(CustomersList, '/customers')
     app.add_resource(Customer, '/customers/<user_id>')
-    app.run()
+    app.run(host='0.0.0.0', port=8081)
+
+
+if __name__ == '__main__':
+    run()
     # To test your server run in terminal:
     # - Get all customers:
     #       curl http://localhost:8081/customers

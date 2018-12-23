@@ -33,42 +33,58 @@ Instructions below are tested with *NodeMCU* devices. For your device instructio
 * Flash firmware: `esptool.py --port <UART PORT> --baud 256000 write_flash -fm dio 0x1000 firmware_esp32-v1.3.2.bin`
 
 #### Hello world
-Let's develop pretty simple static web application:
+Let's develop [Hello World](https://github.com/belyalov/tinyweb/blob/master/examples/hello_world.py) web app:
 ```python
-import network
 import tinyweb
 
-# Connect to your WiFi AP
-sta_if = network.WLAN(network.STA_IF)
-sta_if.active(True)
-sta_if.connect('<ssid>', '<password>')
 
 # Create web server application
 app = tinyweb.webserver()
 
-# Hello world index page (just to be sure - let's handle most popular index links)
+
+# Index page
 @app.route('/')
-@app.route('/index.html')
-async def index(req, resp):
-    await resp.start_html()
-    await resp.send('<html><body><h1>Hello, world!</h1></html>\n')
-
-# Images (you need to put some images into 'images/' folder)
-@app.route('/images/<fn>')
-async def images(req, resp, fn):
-    # Send picture. Filename - in just a parameter
-    await resp.send_file('images/{}'.format(fn))
-
-# Some REST API endpoint
-@app.resource('/user/<id>')
-def user(data, id):
-    return {'id': id, 'name': 'Foo', 'status': 'online'}
+async def index(request, response):
+    # Start HTTP response with content-type text/html
+    await response.start_html()
+    # Send actual HTML page
+    await response.send('<html><body><h1>Hello, world! (<a href="/table">table</a>)</h1></html>\n')
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80)
+# Another one, more complicated page
+@app.route('/table')
+async def table(request, response):
+    # Start HTTP response with content-type text/html
+    await response.start_html()
+    await response.send('<html><body><h1>Simple table</h1>'
+                        '<table border=1 width=400>'
+                        '<tr><td>Name</td><td>Some Value</td></tr>')
+    for i in range(10):
+        await response.send('<tr><td>Name{}</td><td>Value{}</td></tr>'.format(i, i))
+    await response.send('</table>'
+                        '</html>')
+
+
+def run():
+    app.run(host='0.0.0.0', port=8081)
+
 ```
-Simple? Oh yeah!
+Simple? Let's try it!
+Flash your desired ESP module with firmware, open REPL and type:
+```python
+>>> import network
+
+# Connect to WiFi
+>>> sta_if = network.WLAN(network.STA_IF)
+>>> sta_if.active(True)
+>>> sta_if.connect('<ssid>', '<password>')
+
+# Run Hello World! :)
+>>> import examples.hello_world as hello
+>>> hello.run()
+```
+
+That's it! :) Try it by open page `http://<your ip>:8081`
 
 Like it? Check more [examples](https://github.com/belyalov/tinyweb/tree/master/examples) then :)
 

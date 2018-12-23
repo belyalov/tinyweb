@@ -106,7 +106,7 @@ def run():
     app.add_resource(Status, '/api/status')
     app.add_resource(GPIOList, '/api/gpio')
     app.add_resource(GPIO, '/api/gpio/<pin>')
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', port=8081)
 
 
 if __name__ == '__main__':

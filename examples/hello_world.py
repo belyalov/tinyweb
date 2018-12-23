@@ -16,7 +16,7 @@ async def index(request, response):
     # Start HTTP response with content-type text/html
     await response.start_html()
     # Send actual HTML page
-    await response.send('<html><body><h1>Hello, world!</h1></html>\n')
+    await response.send('<html><body><h1>Hello, world! (<a href="/table">table</a>)</h1></html>\n')
 
 
 # HTTP redirection
@@ -40,8 +40,12 @@ async def table(request, response):
                         '</html>')
 
 
+def run():
+    app.run(host='0.0.0.0', port=8081)
+
+
 if __name__ == '__main__':
-    app.run()
+    run()
     # To test your server:
     # - Terminal:
     #   $ curl http://localhost:8081

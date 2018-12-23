@@ -27,7 +27,7 @@ async def images(req, resp, fn):
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='0.0.0.0', port=8081)
     # To test your server just open page in browser:
     #   http://localhost:8081
     #   or
