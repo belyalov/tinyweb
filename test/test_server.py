@@ -625,6 +625,8 @@ class ResourceGenerator():
     async def get(self, data):
         yield 'longlongchunkchunk1'
         yield 'chunk2'
+        # unicode support
+        yield '\u265E'
 
 
 class ResourceNegative():
@@ -722,6 +724,10 @@ class ServerResource(unittest.TestCase):
                '\r\n',
                '6\r\n',
                'chunk2',
+               '\r\n',
+               # next chunk is 1 char len UTF-8 string
+               '3\r\n',
+               '\u265E',
                '\r\n',
                '0\r\n\r\n']
         self.assertEqual(wrt.history, exp)

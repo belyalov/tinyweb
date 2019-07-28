@@ -335,7 +335,8 @@ async def restful_resource_handler(req, resp, param=None):
         await resp._send_headers()
         # Drain generator
         for chunk in res:
-            await resp.send('{:x}\r\n'.format(len(chunk)))
+            chunk_len = len(chunk.encode('utf-8'))
+            await resp.send('{:x}\r\n'.format(chunk_len))
             await resp.send(chunk)
             await resp.send('\r\n')
             gc.collect()
