@@ -556,7 +556,7 @@ class webserver:
         except TypeError:
             obj = cls
         # Get all implemented HTTP methods and make callmap
-        for m in ['GET', 'POST', 'PUT', 'DELETE']:
+        for m in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']:
             fn = m.lower()
             if hasattr(obj, fn):
                 methods.append(m)
