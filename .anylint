@@ -1,0 +1,3 @@
+{
+    "ignore": ["examples/static/", "CONTRIBUTING.md", "ISSUE_TEMPLATE.md", "README.md"]
+}
