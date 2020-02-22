@@ -24,7 +24,8 @@ install:
   - ln -s `pwd`/tinyweb $MDST/tinyweb
   # compile/install micropython.
   - cd micropython
-  - git checkout 39eef270831323b77445e0458c9357d38e23658a
+  - git checkout v1.12
+  - sudo make -C mpy-cross
   - sudo make -C ports/unix axtls install
   - cd ..
 
@@ -42,8 +43,8 @@ script:
   - mkdir -p $MPORT/examples
   - cp examples/*.py $MPORT/examples
   # Compile firmware for esp8266
-  - docker run -v`pwd`/micropython:/micropython arsenicus/esp-open-sdk /bin/bash -c ". /.bashrc && cd /micropython/ports/esp8266 && make"
-  - cp micropython/ports/esp8266/build/firmware-combined.bin ./firmware_esp8266-$TRAVIS_TAG.bin
+  - docker run -v`pwd`/micropython:/micropython arsenicus/esp-open-sdk:latest /bin/bash -c ". /.bashrc && cd /micropython/ports/esp8266 && make"
+  - cp micropython/ports/esp8266/build-GENERIC/firmware-combined.bin ./firmware_esp8266-$TRAVIS_TAG.bin
   # Compile firmware for esp32
   - export MPORT=micropython/ports/esp32/modules
   - cp -r tinyweb $MPORT
@@ -53,8 +54,8 @@ script:
   - mkdir -p $MPORT/examples
   - cp examples/*.py $MPORT/examples
   # Supported ESP32 SDK
-  - docker run -v`pwd`/micropython:/micropython arsenicus/esp32-open-sdk:30545f4cccec7460634b656d278782dd7151098e /bin/bash -c ". /.bashrc && cd /micropython/ports/esp32 && make"
-  - cp micropython/ports/esp32/build/firmware.bin ./firmware_esp32-$TRAVIS_TAG.bin
+  - docker run -v`pwd`/micropython:/micropython arsenicus/esp-open-sdk:latest_esp32 /bin/bash -c ". /.bashrc && cd /micropython/ports/esp32 && make"
+  - cp micropython/ports/esp32/build-GENERIC/firmware.bin ./firmware_esp32-$TRAVIS_TAG.bin
 
 deploy:
   provider: releases
