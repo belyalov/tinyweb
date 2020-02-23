@@ -410,7 +410,8 @@ class webserver:
         # Find URL handler
         req.handler, req.params = self._find_url_handler(req)
         if not req.handler:
-            # No URL handler found - HTTP 404
+            # No URL handler found - read response and issue HTTP 404
+            await req.read_headers()
             raise HTTPException(404)
         # req.params = params
         # req.handler = han
