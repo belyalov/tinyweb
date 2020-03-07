@@ -1,23 +1,23 @@
 ## TinyWeb [![Build Status](https://travis-ci.org/belyalov/tinyweb.svg?branch=master)](https://travis-ci.org/belyalov/tinyweb)
 Simple and lightweight (thus - *tiny*) HTTP server for tiny devices like **ESP8266** / **ESP32** running [micropython](https://github.com/micropython/micropython).
-Having an simple HTTP server allows developers to create nice and modern UI for their IOT devices.
-By itself - *tinyweb* is just simple TCP server which runs in top of **uasyncio** - async like library for micropython, therefore tinyweb is single threaded server.
+Having simple HTTP server allows developers to create nice and modern UI for their IoT devices.
+By itself - *tinyweb* is just simple TCP server running on top of `uasyncio` - library for micropython, therefore *tinyweb* is single threaded server.
 
 ### Features
-* Fully asynchronous using [uasyncio](https://github.com/micropython/micropython-lib/tree/master/uasyncio) library for MicroPython.
+* Fully asynchronous when using with [uasyncio](https://github.com/micropython/micropython-lib/tree/master/uasyncio) library for MicroPython.
 * [Flask](http://flask.pocoo.org/) / [Flask-RESTful](https://flask-restful.readthedocs.io/en/latest/) like API.
-* *Tiny* memory usage. So you can run it on devices like **ESP8266 / ESP32** with 64K/96K of RAM onboard. BTW, there is a huge room for optimizations - so your contributions are warmly welcomed.
+* *Tiny* memory usage. So you can run it on devices like **ESP8266 / ESP32** with 64K/96K of onboard RAM. BTW, there is a huge room for optimizations - so your contributions are warmly welcomed.
 * Support for static content serving from filesystem.
 * Great unittest coverage. So you can be confident about quality :)
 
 ### Requirements
-* [uasyncio](https://github.com/micropython/micropython-lib/tree/master/uasyncio) - micropython version of *async* library for big brother - python3.
+* [uasyncio](https://github.com/micropython/micropython-lib/tree/master/uasyncio) - micropython version of *async* python library.
 * [uasyncio-core](https://github.com/micropython/micropython-lib/tree/master/uasyncio.core)
 * [logging](https://github.com/micropython/micropython-lib/tree/master/logging)
 
 ### Quickstart
-Tinyweb comes as a compiled firmware for ESP8266 / ESP32 as well ("frozen modules"). You don't have to use it - however, it could be easiest way to try it :)
-Instructions below are tested with *NodeMCU* devices. For your device instructions could be slightly different, so keep in mind.
+The easist way to try it - is using pre-compiled firmware for ESP8266 / ESP32.
+Instructions below are tested with *NodeMCU* devices. For any other devices instructions could be a bit different, so keep in mind.
 **CAUTION**: If you proceed with installation all data on your device will **lost**!
 
 #### Installation - ESP8266
@@ -70,7 +70,7 @@ def run():
 
 ```
 Simple? Let's try it!
-Flash your desired ESP module with firmware, open REPL and type:
+Flash your device with firmware, open REPL and type:
 ```python
 >>> import network
 
