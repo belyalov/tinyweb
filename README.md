@@ -4,16 +4,14 @@ Having an simple HTTP server allows developers to create nice and modern UI for 
 By itself - *tinyweb* is just simple TCP server which runs in top of **uasyncio** - async like library for micropython, therefore tinyweb is single threaded server.
 
 ### Features
-* Fully asynchronous using [uasyncio](https://github.com/micropython/micropython-lib/tree/master/uasyncio) library for MicroPython.
+* Fully asynchronous using micropython's standard `uasyncio`.
 * [Flask](http://flask.pocoo.org/) / [Flask-RESTful](https://flask-restful.readthedocs.io/en/latest/) like API.
 * *Tiny* memory usage. So you can run it on devices like **ESP8266 / ESP32** with 64K/96K of RAM onboard. BTW, there is a huge room for optimizations - so your contributions are warmly welcomed.
 * Support for static content serving from filesystem.
 * Great unittest coverage. So you can be confident about quality :)
 
 ### Requirements
-* [uasyncio](https://github.com/micropython/micropython-lib/tree/master/uasyncio) - micropython version of *async* library for big brother - python3.
-* [uasyncio-core](https://github.com/micropython/micropython-lib/tree/master/uasyncio.core)
-* [logging](https://github.com/micropython/micropython-lib/tree/master/logging)
+* micropython with embedded `uasync` support (this version is not released yet)
 
 ### Quickstart
 Tinyweb comes as a compiled firmware for ESP8266 / ESP32 as well ("frozen modules"). You don't have to use it - however, it could be easiest way to try it :)
@@ -156,7 +154,7 @@ Main tinyweb app class.
 * `shutdown(self)` - gracefully shutdown web server. Meaning close all active connections / server socket and cancel all started coroutines. **NOTE** be sure to it in event loop or run event loop at least once, like:
     ```python
     async def all_shutdown():
-        await asyncio.sleep_ms(100)
+        await uasyncio.sleep_ms(100)
 
     try:
         web = tinyweb.webserver()

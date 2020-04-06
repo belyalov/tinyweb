@@ -6,9 +6,9 @@ MIT license
 """
 
 import unittest
-import uos as os
-import uerrno as errno
-import uasyncio as asyncio
+import os
+import errno
+import uasyncio
 from tinyweb import webserver
 from tinyweb.server import urldecode_plus, parse_query_string
 from tinyweb.server import request, HTTPException
@@ -81,7 +81,7 @@ async def mock_wait_for(coro, timeout):
 
 def run_coro(coro):
     # Mock wait_for() function with simple dummy
-    asyncio.wait_for = (lambda c, t: await c)
+    uasyncio.wait_for = (lambda c, t: await c)
     """Simple helper to run coroutine"""
     for i in coro:
         pass

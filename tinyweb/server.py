@@ -3,17 +3,20 @@ Tiny Web - pretty simple and powerful web server for tiny platforms like ESP8266
 MIT license
 (C) Konstantin Belyalov 2017-2018
 """
-import logging
-import uasyncio as asyncio
-import ujson as json
+import uasyncio
+import json
 import gc
-import uos as os
+import os
 import sys
-import uerrno as errno
-import usocket as socket
+import errno
+import socket
 
 
-log = logging.getLogger('WEB')
+def default_log_error(e):
+    print("ERROR: {}".format(e))
+
+
+log_error = default_log_error
 
 
 def urldecode_plus(s):
@@ -323,7 +326,7 @@ async def restful_resource_handler(req, resp, param=None):
     # it can also return error code together with str / dict
     # res = {'blah': 'blah'}
     # res = {'blah': 'blah'}, 201
-    if isinstance(res, asyncio.type_gen):
+    if isinstance(res, uasyncio.type_gen):
         # Result is generator, use chunked response
         # NOTICE: HTTP 1.0 by itself does not support chunked responses, so, making workaround:
         # Response is HTTP/1.1 with Connection: close
@@ -376,7 +379,7 @@ class webserver:
             debug           - Whether send exception info (text + backtrace)
                               to client together with HTTP 500 or not.
         """
-        self.loop = asyncio.get_event_loop()
+        self.loop = uasyncio.get_event_loop()
         self.request_timeout = request_timeout
         self.max_concurrency = max_concurrency
         self.backlog = backlog
@@ -429,7 +432,7 @@ class webserver:
             req = request(reader)
             resp = response(writer)
             # Read HTTP Request with timeout
-            await asyncio.wait_for(self._handle_request(req, resp),
+            await uasyncio.wait_for(self._handle_request(req, resp),
                                    self.request_timeout)
 
             # OPTIONS method is handled automatically
@@ -454,7 +457,7 @@ class webserver:
             else:
                 await req.handler(req, resp)
             # Done here
-        except (asyncio.CancelledError, asyncio.TimeoutError):
+        except (uasyncio.CancelledError, uasyncio.TimeoutError):
             pass
         except OSError as e:
             # Do not send response for connection related errors - too late :)
@@ -463,16 +466,15 @@ class webserver:
                 try:
                     await resp.error(500)
                 except Exception as e:
-                    log.exc(e, "")
+                    log_error(e)
         except HTTPException as e:
             try:
                 await resp.error(e.code)
             except Exception as e:
-                log.exc(e)
+                log_error(e)
         except Exception as e:
             # Unhandled expection in user's method
-            log.error(req.path.decode())
-            log.exc(e, "")
+            log_error(e)
             try:
                 await resp.error(500)
                 # Send exception info if desired
@@ -616,15 +618,15 @@ class webserver:
         sock.listen(backlog)
         try:
             while True:
-                yield asyncio.IORead(sock)
+                yield uasyncio.IORead(sock)
                 csock, caddr = sock.accept()
                 csock.setblocking(False)
                 # Start handler / keep it in the map - to be able to
                 # shutdown gracefully - by close all connections
                 self.processed_connections += 1
                 hid = id(csock)
-                handler = self._handler(asyncio.StreamReader(csock),
-                                        asyncio.StreamWriter(csock, {}))
+                handler = self._handler(uasyncio.StreamReader(csock),
+                                        uasyncio.StreamWriter(csock, {}))
                 self.conns[hid] = handler
                 self.loop.create_task(handler)
                 # In case of max concurrency reached - temporary pause server:
@@ -634,7 +636,7 @@ class webserver:
                 if len(self.conns) == self.max_concurrency:
                     # Pause
                     yield False
-        except asyncio.CancelledError:
+        except uasyncio.CancelledError:
             return
         finally:
             sock.close()
@@ -654,6 +656,6 @@ class webserver:
 
     def shutdown(self):
         """Gracefully shutdown Web Server"""
-        asyncio.cancel(self._server_coro)
-        for hid, coro in self.conns.items():
-            asyncio.cancel(coro)
+        uasyncio.cancel(self._server_coro)
+        for coro in self.conns.values():
+            uasyncio.cancel(coro)
