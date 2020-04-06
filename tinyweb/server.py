@@ -1,7 +1,7 @@
 """
 Tiny Web - pretty simple and powerful web server for tiny platforms like ESP8266 / ESP32
 MIT license
-(C) Konstantin Belyalov 2017-2018
+(C) Konstantin Belyalov 2017-2020
 """
 import uasyncio
 import json
@@ -17,6 +17,9 @@ def default_log_error(e):
 
 
 log_error = default_log_error
+
+
+type_gen = type((lambda: (yield))())
 
 
 def urldecode_plus(s):
@@ -326,7 +329,7 @@ async def restful_resource_handler(req, resp, param=None):
     # it can also return error code together with str / dict
     # res = {'blah': 'blah'}
     # res = {'blah': 'blah'}, 201
-    if isinstance(res, uasyncio.type_gen):
+    if isinstance(res, type_gen):
         # Result is generator, use chunked response
         # NOTICE: HTTP 1.0 by itself does not support chunked responses, so, making workaround:
         # Response is HTTP/1.1 with Connection: close
@@ -364,7 +367,7 @@ async def restful_resource_handler(req, resp, param=None):
 
 class webserver:
 
-    def __init__(self, request_timeout=3, max_concurrency=3, backlog=16, debug=False):
+    def __init__(self, host="127.0.0.1", port=8081, request_timeout=3, max_concurrency=3, backlog=16, debug=False):
         """Tiny Web Server class.
         Keyword arguments:
             request_timeout - Time for client to send complete request
@@ -379,17 +382,27 @@ class webserver:
             debug           - Whether send exception info (text + backtrace)
                               to client together with HTTP 500 or not.
         """
-        self.loop = uasyncio.get_event_loop()
+        self.host = host
+        self.port = port
         self.request_timeout = request_timeout
         self.max_concurrency = max_concurrency
         self.backlog = backlog
         self.debug = debug
         self.explicit_url_map = {}
         self.parameterized_url_map = {}
-        # Currently opened connections
-        self.conns = {}
         # Statistics
         self.processed_connections = 0
+
+    async def __aenter__(self):
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self._server.close()
+        await self._server.wait_closed()
+
+    async def start(self):
+        self._server = await uasyncio.start_server(self._handler, self.host, self.port, backlog=self.backlog)
 
     def _find_url_handler(self, req):
         """Helper to find URL handler.
@@ -484,12 +497,6 @@ class webserver:
                 pass
         finally:
             await writer.aclose()
-            # Max concurrency support -
-            # if queue is full schedule resume of TCP server task
-            if len(self.conns) == self.max_concurrency:
-                self.loop.call_soon(self._server_coro)
-            # Delete connection, using socket as a key
-            del self.conns[id(writer.s)]
 
     def add_route(self, url, f, **kwargs):
         """Add URL to function mapping.
@@ -605,57 +612,27 @@ class webserver:
             return f
         return _resource
 
-    async def _tcp_server(self, host, port, backlog):
-        """TCP Server implementation.
-        Opens socket for accepting connection and
-        creates task for every new accepted connection
-        """
-        addr = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0][-1]
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setblocking(False)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(addr)
-        sock.listen(backlog)
-        try:
-            while True:
-                yield uasyncio.IORead(sock)
-                csock, caddr = sock.accept()
-                csock.setblocking(False)
-                # Start handler / keep it in the map - to be able to
-                # shutdown gracefully - by close all connections
-                self.processed_connections += 1
-                hid = id(csock)
-                handler = self._handler(uasyncio.StreamReader(csock),
-                                        uasyncio.StreamWriter(csock, {}))
-                self.conns[hid] = handler
-                self.loop.create_task(handler)
-                # In case of max concurrency reached - temporary pause server:
-                # 1. backlog must be greater than max_concurrency, otherwise
-                #    client will got "Connection Reset"
-                # 2. Server task will be resumed whenever one active connection finished
-                if len(self.conns) == self.max_concurrency:
-                    # Pause
-                    yield False
-        except uasyncio.CancelledError:
-            return
-        finally:
-            sock.close()
-
     def run(self, host="127.0.0.1", port=8081, loop_forever=True):
-        """Run Web Server. By default it runs forever.
+        """[DEPRECATED] In favour of native uasyncio this method is deprecated.
+        Use new, async version - start() instead.
+        NOTE: shutdown() is not supported when server started with run()
+
+        Run Web Server. By default it runs forever.
 
         Keyword arguments:
             host - host to listen on. By default - localhost (127.0.0.1)
             port - port to listen on. By default - 8081
-            loop_forever - run loo.loop_forever(), otherwise caller must run it by itself.
+            loop_forever - run uasyncio.loop_forever(), otherwise caller must run it by theirselves.
         """
-        self._server_coro = self._tcp_server(host, port, self.backlog)
-        self.loop.create_task(self._server_coro)
+        self._server = None
+        uasyncio.create_task(
+            uasyncio.start_server(self._handler, host, port)
+        )
         if loop_forever:
-            self.loop.run_forever()
+            uasyncio.get_event_loop().run_forever()
 
     def shutdown(self):
         """Gracefully shutdown Web Server"""
-        uasyncio.cancel(self._server_coro)
-        for coro in self.conns.values():
-            uasyncio.cancel(coro)
+        # TODO: maybe close all connections as well? Isn't it done automatically?
+        if self._server is not None:
+            self._server.close()

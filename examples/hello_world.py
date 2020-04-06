@@ -1,13 +1,14 @@
 #!/usr/bin/env micropython
 """
 MIT license
-(C) Konstantin Belyalov 2017-2018
+(C) Konstantin Belyalov 2017-2020
 """
 import tinyweb
+import uasyncio
 
 
 # Create web server application
-app = tinyweb.webserver()
+app = tinyweb.webserver(host='0.0.0.0', port=8081)
 
 
 # Index page
@@ -40,21 +41,22 @@ async def table(request, response):
                         '</html>')
 
 
-def run():
-    app.run(host='0.0.0.0', port=8081)
+async def main():
+    await app.start()
 
 
 if __name__ == '__main__':
-    run()
+    uasyncio.run(main())
+    uasyncio.get_event_loop().run_forever()
     # To test your server:
     # - Terminal:
-    #   $ curl http://localhost:8081
+    #   $ curl http://IP_ADDR:8081
     #   or
-    #   $ curl http://localhost:8081/table
+    #   $ curl http://IP_ADDR:8081/table
     #
     # - Browser:
-    #   http://localhost:8081
-    #   http://localhost:8081/table
+    #   http://IP_ADDR:8081
+    #   http://IP_ADDR:8081/table
     #
-    # - To test HTTP redirection:
-    #   curl http://localhost:8081/redirect -v
+    # - To test HTTP redirect:
+    #   curl http://IP_ADDR:8081/redirect -v
