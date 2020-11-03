@@ -372,20 +372,14 @@ class webserver:
         Keyword arguments:
             request_timeout - Time for client to send complete request
                               after that connection will be closed.
-            max_concurrency - How many connections can be processed concurrently.
-                              It is very important to limit this number because of
-                              memory constrain.
-                              Default value depends on platform
             backlog         - Parameter to socket.listen() function. Defines size of
                               pending to be accepted connections queue.
-                              Must be greater than max_concurrency
             debug           - Whether send exception info (text + backtrace)
                               to client together with HTTP 500 or not.
         """
         self.host = host
         self.port = port
         self.request_timeout = request_timeout
-        self.max_concurrency = max_concurrency
         self.backlog = backlog
         self.debug = debug
         self.explicit_url_map = {}
