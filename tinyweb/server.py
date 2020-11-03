@@ -446,7 +446,7 @@ class webserver:
             resp = response(writer)
             # Read HTTP Request with timeout
             await uasyncio.wait_for(self._handle_request(req, resp),
-                                   self.request_timeout)
+                                    self.request_timeout)
 
             # OPTIONS method is handled automatically
             if req.method == b'OPTIONS':
