@@ -1,0 +1,28 @@
+#! /bin/sh
+#
+# tinyci
+#
+#
+#
+# Simple test runner that watches for changes and runs
+#
+#    ./tinyci
+#
+# Get a unix port of micropython using pyenv https://github.com/pyenv/pyenv
+#
+# Install all the dependencies needed using upip
+#
+#    PYENV_VERSION=micropython-1.13 python -m upip install -p ./lib unittest uasyncio
+#
+# You may need to install the inotifywait command for your environment. 
+#
+# type inotifywait || echo "inotify-tools is not installed" && exit 1
+
+while true
+do
+    inotifywait -q -q -r -e 'close_write' \
+        --exclude '^\..*\.sw[px]*$|4913|~$|.git/.*\.lock$|.*i\.log$|spec/fixtures|build/|_trial_temp*' .
+    sleep 1
+    printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' =
+    PYENV_VERSION=micropython-1.13 python -c "import unittest; unittest.main('test/test_server')"
+done
