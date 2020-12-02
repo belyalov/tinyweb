@@ -5,6 +5,7 @@ MIT license
 """
 import logging
 import uasyncio as asyncio
+import uasyncio.core
 import ujson as json
 import gc
 import uos as os
@@ -14,6 +15,10 @@ import usocket as socket
 
 
 log = logging.getLogger('WEB')
+
+# uasyncio v3 is shipped with MicroPython 1.13, and contains some subtle
+# but breaking changes. See also https://github.com/peterhinch/micropython-async/blob/master/v3/README.md
+IS_UASYNCIO_V3 = hasattr(asyncio, "__version__") and asyncio.__version__ >= (3,)
 
 
 def urldecode_plus(s):
@@ -616,7 +621,10 @@ class webserver:
         sock.listen(backlog)
         try:
             while True:
-                yield asyncio.IORead(sock)
+                if IS_UASYNCIO_V3:
+                    yield uasyncio.core._io_queue.queue_read(sock)
+                else:
+                    yield asyncio.IORead(sock)
                 csock, caddr = sock.accept()
                 csock.setblocking(False)
                 # Start handler / keep it in the map - to be able to
