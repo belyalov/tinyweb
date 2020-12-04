@@ -21,6 +21,32 @@ log = logging.getLogger('WEB')
 IS_UASYNCIO_V3 = hasattr(asyncio, "__version__") and asyncio.__version__ >= (3,)
 
 
+MIME_TYPES_PER_EXT = {
+    ".txt"   : "text/plain",
+    ".htm"   : "text/html",
+    ".html"  : "text/html",
+    ".css"   : "text/css",
+    ".csv"   : "text/csv",
+    ".js"    : "application/javascript",
+    ".xml"   : "application/xml",
+    ".xhtml" : "application/xhtml+xml",
+    ".json"  : "application/json",
+    ".zip"   : "application/zip",
+    ".pdf"   : "application/pdf",
+    ".ts"    : "application/typescript",
+    ".woff"  : "font/woff",
+    ".woff2" : "font/woff2",
+    ".ttf"   : "font/ttf",
+    ".otf"   : "font/otf",
+    ".jpg"   : "image/jpeg",
+    ".jpeg"  : "image/jpeg",
+    ".png"   : "image/png",
+    ".gif"   : "image/gif",
+    ".svg"   : "image/svg+xml",
+    ".ico"   : "image/x-icon"
+}
+
+
 def urldecode_plus(s):
     """Decode urlencoded string (including '+' char).
 
@@ -277,9 +303,16 @@ class response:
             stat = os.stat(filename)
             slen = str(stat[6])
             self.add_header('Content-Length', slen)
-            # Find content type
+
+            # Set content-type header (if possible)
             if content_type:
                 self.add_header('Content-Type', content_type)
+            else:
+                # Auto-detect mime type based on file extension (eg. .css)
+                file_extension = "." + filename.split(".")[-1]
+                if file_extension in MIME_TYPES_PER_EXT:
+                    self.add_header('Content-Type', MIME_TYPES_PER_EXT[file_extension])
+
             # Add content-encoding, if any
             if content_encoding:
                 self.add_header('Content-Encoding', content_encoding)
