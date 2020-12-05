@@ -586,7 +586,8 @@ class webserver:
                 await response.start_html()
                 await response.send('<html><body><h1>My custom 404!</h1></html>\n')
         """
-        params = { 'methods': [b'GET'], 'save_headers': [], 'max_body_size': 1024, 'allowed_access_control_headers': '*', 'allowed_access_control_origins': '*' }
+        params = {'methods': [b'GET'], 'save_headers': [], 'max_body_size': 1024, 'allowed_access_control_headers': '*', 'allowed_access_control_origins': '*'}
+
         def _route(f):
             self.catch_all_handler = (f, params)
             return f
