@@ -495,7 +495,7 @@ class webserver:
             # Max concurrency support -
             # if queue is full schedule resume of TCP server task
             if len(self.conns) == self.max_concurrency:
-                self.loop.call_soon(self._server_coro)
+                self.loop.create_task(self._server_coro)
             # Delete connection, using socket as a key
             del self.conns[id(writer.s)]
 
