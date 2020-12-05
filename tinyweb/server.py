@@ -387,6 +387,7 @@ class webserver:
         self.backlog = backlog
         self.debug = debug
         self.explicit_url_map = {}
+        self.catch_all_handler = None
         self.parameterized_url_map = {}
         # Currently opened connections
         self.conns = {}
@@ -407,6 +408,10 @@ class webserver:
             # Save parameter into request
             req._param = req.path[idx:].decode()
             return self.parameterized_url_map[path2]
+
+        if self.catch_all_handler:
+            return self.catch_all_handler
+
         # No handler found
         return (None, None)
 
@@ -570,6 +575,22 @@ class webserver:
                        methods=methods,
                        save_headers=['Content-Length', 'Content-Type'],
                        _callmap=callmap)
+
+    def catchall(self):
+        """Decorator for catchall()
+
+        Example:
+            @app.catchall()
+            def catchall_handler(req, resp):
+                response.code = 404
+                await response.start_html()
+                await response.send('<html><body><h1>My custom 404!</h1></html>\n')
+        """
+        params = { 'methods': [b'GET'], 'save_headers': [], 'max_body_size': 1024, 'allowed_access_control_headers': '*', 'allowed_access_control_origins': '*' }
+        def _route(f):
+            self.catch_all_handler = (f, params)
+            return f
+        return _route
 
     def route(self, url, **kwargs):
         """Decorator for add_route()
