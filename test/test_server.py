@@ -364,6 +364,27 @@ class ServerFull(unittest.TestCase):
         self.assertEqual(wrt.history, expected)
         self.assertTrue(wrt.closed)
 
+    def testCatchAllDecorator(self):
+        # A fresh server for the catchall handler
+        server_for_catchall_decorator = webserver()
+
+        # Catchall decorator and handler
+        @server_for_catchall_decorator.catchall()
+        async def route_for_catchall_decorator(req, resp):
+            await resp.start_html()
+            await resp.send('my404')
+
+        rdr = mockReader(['GET /this/is/an/invalid/url HTTP/1.1\r\n',
+                          HDRE])
+        wrt = mockWriter()
+        server_for_catchall_decorator.conns[id(1)] = None
+        run_coro(server_for_catchall_decorator._handler(rdr, wrt))
+        expected = ['HTTP/1.0 200 MSG\r\n' +
+                    'Content-Type: text/html\r\n\r\n',
+                    'my404']
+        self.assertEqual(wrt.history, expected)
+        self.assertTrue(wrt.closed)
+
     async def dummy_handler(self, req, resp):
         """Dummy URL handler. It just records the fact - it has been called"""
         self.dummy_req = req
