@@ -1,0 +1,36 @@
+name: Run the tests
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.x
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+
+      - name: Install MicroPython dependencies
+        run: |
+          sudo apt-get update
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y build-essential libreadline-dev libffi-dev git pkg-config gcc-arm-none-eabi libnewlib-arm-none-eabi
+          git clone --recurse-submodules https://github.com/micropython/micropython.git
+
+      - name: Build MicroPython
+        run: |
+          cd micropython
+          git checkout v1.13
+          sudo make -C mpy-cross
+          sudo make -C ports/unix axtls install
+          cd ..
+
+      - name: Run the tests
+        run: |
+          micropython -m upip install logging unittest uasyncio uasyncio.core
+          cp -r tinyweb ~/.micropython/lib/
+          micropython test/test_server.py
