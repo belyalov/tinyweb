@@ -328,7 +328,8 @@ async def restful_resource_handler(req, resp, param=None):
     # it can also return error code together with str / dict
     # res = {'blah': 'blah'}
     # res = {'blah': 'blah'}, 201
-    if isinstance(res, asyncio.type_gen):
+    type_gen = type((lambda: (yield))())
+    if isinstance(res, type_gen):
         # Result is generator, use chunked response
         # NOTICE: HTTP 1.0 by itself does not support chunked responses, so, making workaround:
         # Response is HTTP/1.1 with Connection: close
