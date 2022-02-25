@@ -253,7 +253,7 @@ class response:
         self.add_header('Content-Type', 'text/html')
         await self._send_headers()
 
-    async def send_file(self, filename, content_type=None, content_encoding=None, max_age=2592000):
+    async def send_file(self, filename, content_type=None, content_encoding=None, max_age=2592000, buf_size=128):
         """Send local file as HTTP response.
         This function is generator.
 
@@ -292,7 +292,7 @@ class response:
             with open(filename) as f:
                 await self._send_headers()
                 gc.collect()
-                buf = bytearray(128)
+                buf = bytearray(min(stat[6], buf_size))
                 while True:
                     size = f.readinto(buf)
                     if size == 0:
