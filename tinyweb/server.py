@@ -608,6 +608,14 @@ class webserver:
             self.add_route(url, f, **kwargs)
             return f
         return _route
+    
+    def get(self, url, **kwargs):
+        kwargs['methods'] = ['GET']
+        return self.route(url, **kwargs)
+
+    def post(self, url, **kwargs):
+        kwargs['methods'] = ['POST']
+        return self.route(url, **kwargs)
 
     def resource(self, url, method='GET', **kwargs):
         """Decorator for add_resource() method
