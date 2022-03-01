@@ -131,16 +131,22 @@ class request:
         # request body, at least for simple urlencoded forms - by processing
         # chunks instead of accumulating payload.
         gc.collect()
-        if b'Content-Length' not in self.headers:
-            return {}
         # Parse payload depending on content type
         if b'Content-Type' not in self.headers:
-            # Unknown content type, return unparsed, raw data
-            return {}
-        size = int(self.headers[b'Content-Length'])
-        if size > self.params['max_body_size'] or size < 0:
-            raise HTTPException(413)
-        data = await self.reader.readexactly(size)
+            # unknown Content-Type
+            raise HTTPException(400)
+        size = int(self.headers[b'Content-Length']) if b'Content-Length' in self.headers else None
+        if size is not None:
+            if size > self.params['max_body_size'] or size < 0:
+                raise HTTPException(413)
+            data = await self.reader.readexactly(size)
+        else:
+            max_body_size = self.params['max_body_size']
+            data = bytearray()
+            while x := await self.reader.read(128):
+                data.extend(x)
+            if len(data) > max_body_size:
+                raise HTTPException(413)
         # Use only string before ';', e.g:
         # application/x-www-form-urlencoded; charset=UTF-8
         ct = self.headers[b'Content-Type'].split(b';', 1)[0]
@@ -519,7 +525,7 @@ class webserver:
             raise ValueError('Invalid URL')
         # Initial params for route
         params = {'methods': ['GET'],
-                  'save_headers': [],
+                  'save_headers': ['Content-Length', 'Content-Type'],
                   'max_body_size': 1024,
                   'allowed_access_control_headers': '*',
                   'allowed_access_control_origins': '*',
