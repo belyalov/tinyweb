@@ -4,7 +4,7 @@ Having simple HTTP server allows developers to create nice and modern UI for the
 By itself - *tinyweb* is just simple TCP server running on top of `uasyncio` - library for micropython, therefore *tinyweb* is single threaded server.
 
 ### Features
-* Fully asynchronous when using with [uasyncio](https://github.com/micropython/micropython-lib/tree/master/uasyncio) library for MicroPython.
+* Fully asynchronous when using with [uasyncio](https://github.com/micropython/micropython-lib/tree/v1.0/uasyncio) library for MicroPython.
 * [Flask](http://flask.pocoo.org/) / [Flask-RESTful](https://flask-restful.readthedocs.io/en/latest/) like API.
 * *Tiny* memory usage. So you can run it on devices like **ESP8266 / ESP32** with 64K/96K of onboard RAM. BTW, there is a huge room for optimizations - so your contributions are warmly welcomed.
 * Support for static content serving from filesystem.
@@ -12,12 +12,12 @@ By itself - *tinyweb* is just simple TCP server running on top of `uasyncio` - l
 
 ### Requirements
 
-* [logging](https://github.com/micropython/micropython-lib/tree/master/logging)
+* [logging](https://github.com/micropython/micropython-lib/tree/master/python-stdlib/logging)
 
 On MicroPython <1.13:
 
-* [uasyncio](https://github.com/micropython/micropython-lib/tree/master/uasyncio) - micropython version of *async* python library.
-* [uasyncio-core](https://github.com/micropython/micropython-lib/tree/master/uasyncio.core)
+* [uasyncio](https://github.com/micropython/micropython-lib/tree/v1.0/uasyncio) - micropython version of *async* python library.
+* [uasyncio-core](https://github.com/micropython/micropython-lib/tree/v1.0/uasyncio.core)
 
 ### Quickstart
 The easist way to try it - is using pre-compiled firmware for ESP8266 / ESP32.
