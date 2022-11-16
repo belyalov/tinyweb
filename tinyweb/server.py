@@ -419,22 +419,18 @@ class webserver:
             return self.explicit_url_map[req.path]
         # Second try - strip last path segment and lookup in another map
         for p, v in self.parameterized_url_map.items():
-            if req.path.startswith(p):
-                # get param name size
-                size = len(v[1].get('_param_names', ''))
-                if size:
-                    # Get param values from path e.g. ['switch', 'on']
-                    pl = [p for p in req.path[len(p)+1:].split(b'/') if p]
-                    # Trim param values to match param name size
-                    if len(pl) < size:
-                        pl.extend([None] * (size - len(pl)))
-                    elif len(pl) > size:
-                        # ditch extra param values
-                        del(pl[size:])
-                    if len(pl):
-                        req._params = pl
+            # Get the number of parameters expected
+            size = len(v[1].get('_param_names', ''))
+            # Try extracting expected param values from path
+            parts = [p.decode() for p in req.path.rsplit(b'/', size) if p]
+            # Does the path match?
+            if not (len(parts) and parts[0] == p.decode()):
+                continue
+            # If we have the correct number of param values, add to request
+            if len(parts) == size+1:
+                req._params = parts[1:]
                 # Path matches, return tuple
-                return v
+            return v
 
         if self.catch_all_handler:
             return self.catch_all_handler
