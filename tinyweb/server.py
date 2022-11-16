@@ -57,6 +57,17 @@ def parse_query_string(s):
     return res
 
 
+def findparam(path):
+    while True:
+        end = path.rfind(b'>')
+        start = path.rfind(b'/<')
+        if start < 0 or end < 0:
+            break
+        param = path[start+2:end]
+        path = path[:start]
+        yield param, path
+
+
 class HTTPException(Exception):
     """HTTP protocol exceptions"""
 
@@ -152,6 +163,9 @@ class request:
         except ValueError:
             # Re-generate exception for malformed form data
             raise HTTPException(400)
+
+    async def read_parse_query_data(self):
+        return parse_query_string(self.query_string.decode())
 
 
 class response:
@@ -306,7 +320,7 @@ class response:
                 raise
 
 
-async def restful_resource_handler(req, resp, param=None):
+async def restful_resource_handler(req, resp, params=None):
     """Handler for RESTful API endpoins"""
     # Gather data - query string, JSON in request body...
     data = await req.read_parse_form_data()
@@ -318,8 +332,8 @@ async def restful_resource_handler(req, resp, param=None):
     _handler, _kwargs = req.params['_callmap'][req.method]
     # Collect garbage before / after handler execution
     gc.collect()
-    if param:
-        res = _handler(data, param, **_kwargs)
+    if params:
+        res = _handler(data, *params, **_kwargs)
     else:
         res = _handler(data, **_kwargs)
     gc.collect()
@@ -404,12 +418,23 @@ class webserver:
         if req.path in self.explicit_url_map:
             return self.explicit_url_map[req.path]
         # Second try - strip last path segment and lookup in another map
-        idx = req.path.rfind(b'/') + 1
-        path2 = req.path[:idx]
-        if len(path2) > 0 and path2 in self.parameterized_url_map:
-            # Save parameter into request
-            req._param = req.path[idx:].decode()
-            return self.parameterized_url_map[path2]
+        for p, v in self.parameterized_url_map.items():
+            if req.path.startswith(p):
+                # get param name size
+                size = len(v[1].get('_param_names', ''))
+                if size:
+                    # Get param values from path e.g. ['switch', 'on']
+                    pl = [p for p in req.path[len(p)+1:].split(b'/') if p]
+                    # Trim param values to match param name size
+                    if len(pl) < size:
+                        pl.extend([None] * (size - len(pl)))
+                    elif len(pl) > size:
+                        # ditch extra param values
+                        del(pl[size:])
+                    if len(pl):
+                        req._params = pl
+                # Path matches, return tuple
+                return v
 
         if self.catch_all_handler:
             return self.catch_all_handler
@@ -461,8 +486,8 @@ class webserver:
 
             # Handle URL
             gc.collect()
-            if hasattr(req, '_param'):
-                await req.handler(req, resp, req._param)
+            if hasattr(req, '_params'):
+                await req.handler(req, resp, req._params)
             else:
                 await req.handler(req, resp)
             # Done here
@@ -529,16 +554,19 @@ class webserver:
         # Convert methods/headers to bytestring
         params['methods'] = [x.encode() for x in params['methods']]
         params['save_headers'] = [x.encode() for x in params['save_headers']]
-        # If URL has a parameter
+        # If URL has parameters
+        
         if url.endswith('>'):
-            idx = url.rfind('<')
-            path = url[:idx]
-            idx += 1
-            param = url[idx:-1]
-            if path.encode() in self.parameterized_url_map:
+            pp = list(findparam(url.encode()))
+            root = b''
+            if len(pp):
+                params['_param_names'] = []
+                for param, path in pp:
+                    params['_param_names'].insert(0, param.decode())
+                    root = path
+            if root in self.parameterized_url_map:
                 raise ValueError('URL exists')
-            params['_param_name'] = param
-            self.parameterized_url_map[path.encode()] = (f, params)
+            self.parameterized_url_map[root] = (f, params)
 
         if url.encode() in self.explicit_url_map:
             raise ValueError('URL exists')
