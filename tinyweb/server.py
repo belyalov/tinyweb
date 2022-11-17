@@ -57,17 +57,6 @@ def parse_query_string(s):
     return res
 
 
-def findparam(path):
-    while True:
-        end = path.rfind(b'>')
-        start = path.rfind(b'/<')
-        if start < 0 or end < 0:
-            break
-        param = path[start+2:end]
-        path = path[:start]
-        yield param, path
-
-
 class HTTPException(Exception):
     """HTTP protocol exceptions"""
 
@@ -420,11 +409,11 @@ class webserver:
         # Second try - strip last path segment and lookup in another map
         for p, v in self.parameterized_url_map.items():
             # Get the number of parameters expected
-            size = len(v[1].get('_param_names', ''))
+            size = v[1].get('_param_count', 0)
             # Try extracting expected param values from path
-            parts = [p.decode() for p in req.path.rsplit(b'/', size) if p]
+            parts = [p.decode() for p in req.path.rsplit(b'/', size)]
             # Does the path match?
-            if not (len(parts) and parts[0] == p.decode()):
+            if not (len(parts) and (parts[0] or '/') == p.decode()):
                 continue
             # If we have the correct number of param values, add to request
             if len(parts) == size+1:
@@ -552,17 +541,15 @@ class webserver:
         params['save_headers'] = [x.encode() for x in params['save_headers']]
         # If URL has parameters
         
-        if url.endswith('>'):
-            pp = list(findparam(url.encode()))
-            root = b''
-            if len(pp):
-                params['_param_names'] = []
-                for param, path in pp:
-                    params['_param_names'].insert(0, param.decode())
-                    root = path
+        if url.endswith('>'):            
+            parts = url.split('/<')
+            root = parts[0] or '/'
+            count = len(parts[1:])
             if root in self.parameterized_url_map:
                 raise ValueError('URL exists')
-            self.parameterized_url_map[root] = (f, params)
+            if count:
+                params['_param_count'] = count
+            self.parameterized_url_map[root.encode()] = (f, params)
 
         if url.encode() in self.explicit_url_map:
             raise ValueError('URL exists')
