@@ -153,7 +153,7 @@ class request:
             # Re-generate exception for malformed form data
             raise HTTPException(400)
 
-    async def read_parse_query_data(self):
+    def read_parse_query_data(self):
         return parse_query_string(self.query_string.decode())
 
 
