@@ -4,8 +4,7 @@ MIT license
 (C) Konstantin Belyalov 2017-2018
 """
 import logging
-import uasyncio as asyncio
-import uasyncio.core
+import asyncio
 import ujson as json
 import gc
 import uos as os
@@ -18,9 +17,11 @@ log = logging.getLogger('WEB')
 
 type_gen = type((lambda: (yield))())
 
-# uasyncio v3 is shipped with MicroPython 1.13, and contains some subtle
+# with v1.21.0 release all u-modules where renamend without the u prefix 
+# -> uasyncio no named asyncio
+# asyncio v3 is shipped with MicroPython 1.13, and contains some subtle
 # but breaking changes. See also https://github.com/peterhinch/micropython-async/blob/master/v3/README.md
-IS_UASYNCIO_V3 = hasattr(asyncio, "__version__") and asyncio.__version__ >= (3,)
+IS_ASYNCIO_V3 = hasattr(asyncio, "__version__") and asyncio.__version__ >= (3,)
 
 
 def urldecode_plus(s):
@@ -645,8 +646,8 @@ class webserver:
         sock.listen(backlog)
         try:
             while True:
-                if IS_UASYNCIO_V3:
-                    yield uasyncio.core._io_queue.queue_read(sock)
+                if IS_ASYNCIO_V3:
+                    yield asyncio.core._io_queue.queue_read(sock)
                 else:
                     yield asyncio.IORead(sock)
                 csock, caddr = sock.accept()
