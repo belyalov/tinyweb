@@ -117,7 +117,7 @@ class request:
             frags = line.split(b':', 1)
             if len(frags) != 2:
                 raise HTTPException(400)
-            if frags[0] in save_headers:
+            if frags[0].lower() in save_headers:
                 self.headers[frags[0]] = frags[1].strip()
 
     async def read_parse_form_data(self):
@@ -528,8 +528,8 @@ class webserver:
         params.update(kwargs)
         params['allowed_access_control_methods'] = ', '.join(params['methods'])
         # Convert methods/headers to bytestring
-        params['methods'] = [x.encode() for x in params['methods']]
-        params['save_headers'] = [x.encode() for x in params['save_headers']]
+        params['methods'] = [x.encode().upper() for x in params['methods']]
+        params['save_headers'] = [x.encode().lower() for x in params['save_headers']]
         # If URL has a parameter
         if url.endswith('>'):
             idx = url.rfind('<')
