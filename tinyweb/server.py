@@ -154,6 +154,9 @@ class request:
             # Re-generate exception for malformed form data
             raise HTTPException(400)
 
+    def read_parse_query_data(self):
+        return parse_query_string(self.query_string.decode())
+
 
 class response:
     """HTTP Response class"""
@@ -307,7 +310,7 @@ class response:
                 raise
 
 
-async def restful_resource_handler(req, resp, param=None):
+async def restful_resource_handler(req, resp, params=None):
     """Handler for RESTful API endpoins"""
     # Gather data - query string, JSON in request body...
     data = await req.read_parse_form_data()
@@ -319,8 +322,8 @@ async def restful_resource_handler(req, resp, param=None):
     _handler, _kwargs = req.params['_callmap'][req.method]
     # Collect garbage before / after handler execution
     gc.collect()
-    if param:
-        res = _handler(data, param, **_kwargs)
+    if params:
+        res = _handler(data, *params, **_kwargs)
     else:
         res = _handler(data, **_kwargs)
     gc.collect()
@@ -392,10 +395,11 @@ class webserver:
         self.explicit_url_map = {}
         self.catch_all_handler = None
         self.parameterized_url_map = {}
+        self.server_coro = None
+        self.server_task = None
         # Currently opened connections
         self.conns = {}
-        # Statistics
-        self.processed_connections = 0
+        self.running = False
 
     def _find_url_handler(self, req):
         """Helper to find URL handler.
@@ -405,12 +409,19 @@ class webserver:
         if req.path in self.explicit_url_map:
             return self.explicit_url_map[req.path]
         # Second try - strip last path segment and lookup in another map
-        idx = req.path.rfind(b'/') + 1
-        path2 = req.path[:idx]
-        if len(path2) > 0 and path2 in self.parameterized_url_map:
-            # Save parameter into request
-            req._param = req.path[idx:].decode()
-            return self.parameterized_url_map[path2]
+        for p, v in self.parameterized_url_map.items():
+            # Get the number of parameters expected
+            size = v[1].get('_param_count', 0)
+            # Try extracting expected param values from path
+            parts = [p.decode() for p in req.path.rsplit(b'/', size)]
+            # Does the path match?
+            if not (len(parts) and (parts[0] or '/') == p.decode()):
+                continue
+            # If we have the correct number of param values, add to request
+            if len(parts) == size+1:
+                req._params = parts[1:]
+                # Path matches, return tuple
+            return v
 
         if self.catch_all_handler:
             return self.catch_all_handler
@@ -462,8 +473,8 @@ class webserver:
 
             # Handle URL
             gc.collect()
-            if hasattr(req, '_param'):
-                await req.handler(req, resp, req._param)
+            if hasattr(req, '_params'):
+                await req.handler(req, resp, req._params)
             else:
                 await req.handler(req, resp)
             # Done here
@@ -498,7 +509,7 @@ class webserver:
             # Max concurrency support -
             # if queue is full schedule resume of TCP server task
             if len(self.conns) == self.max_concurrency:
-                self.loop.create_task(self._server_coro)
+                self._server_task = self.loop.create_task(self._server_coro)
             # Delete connection, using socket as a key
             del self.conns[id(writer.s)]
 
@@ -530,16 +541,17 @@ class webserver:
         # Convert methods/headers to bytestring
         params['methods'] = [x.encode() for x in params['methods']]
         params['save_headers'] = [x.encode() for x in params['save_headers']]
-        # If URL has a parameter
-        if url.endswith('>'):
-            idx = url.rfind('<')
-            path = url[:idx]
-            idx += 1
-            param = url[idx:-1]
-            if path.encode() in self.parameterized_url_map:
+        # If URL has parameters
+        
+        if url.endswith('>'):            
+            parts = url.split('/<')
+            root = parts[0] or '/'
+            count = len(parts[1:])
+            if root in self.parameterized_url_map:
                 raise ValueError('URL exists')
-            params['_param_name'] = param
-            self.parameterized_url_map[path.encode()] = (f, params)
+            if count:
+                params['_param_count'] = count
+            self.parameterized_url_map[root.encode()] = (f, params)
 
         if url.encode() in self.explicit_url_map:
             raise ValueError('URL exists')
@@ -654,12 +666,11 @@ class webserver:
                 csock.setblocking(False)
                 # Start handler / keep it in the map - to be able to
                 # shutdown gracefully - by close all connections
-                self.processed_connections += 1
                 hid = id(csock)
                 handler = self._handler(asyncio.StreamReader(csock),
                                         asyncio.StreamWriter(csock, {}))
-                self.conns[hid] = handler
-                self.loop.create_task(handler)
+                task = self.loop.create_task(handler)
+                self.conns[hid] = task
                 # In case of max concurrency reached - temporary pause server:
                 # 1. backlog must be greater than max_concurrency, otherwise
                 #    client will got "Connection Reset"
@@ -673,6 +684,9 @@ class webserver:
             sock.close()
 
     def run(self, host="127.0.0.1", port=8081, loop_forever=True):
+        if self.running:
+            return
+        self.running = True
         """Run Web Server. By default it runs forever.
 
         Keyword arguments:
@@ -681,12 +695,16 @@ class webserver:
             loop_forever - run loo.loop_forever(), otherwise caller must run it by itself.
         """
         self._server_coro = self._tcp_server(host, port, self.backlog)
-        self.loop.create_task(self._server_coro)
+        self._server_task = self.loop.create_task(self._server_coro)
         if loop_forever:
             self.loop.run_forever()
 
     def shutdown(self):
+        if not self.running:
+            return
+        self.running = False
         """Gracefully shutdown Web Server"""
-        asyncio.cancel(self._server_coro)
-        for hid, coro in self.conns.items():
-            asyncio.cancel(coro)
+        self._server_task.cancel()
+        for hid, task in self.conns.items():
+            task.cancel()
+        self.conns.clear()
